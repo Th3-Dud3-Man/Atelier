@@ -70,7 +70,7 @@ Google plafonne un corpus à **10 Go**, et comme l'empreinte réelle vaut enviro
 L'app est faite pour ce cas, et elle ne vous demande rien :
 
 - **Tout est catalogué**, quelle que soit la taille : chaque fichier est connu par son nom, son dossier et sa date. Le catalogue vit sur l'appareil, ne coûte rien et n'est jamais envoyé.
-- **Le corpus indexé est un plan de travail**, pas une copie de votre disque. Il tient dans un budget que vous réglez (3 Go par défaut), et l'app le remplit d'abord avec vos documents les plus récents.
+- **Le corpus indexé est un plan de travail**, pas une copie de votre disque. Il tient dans un budget que vous réglez (2 Go par défaut), et l'app le remplit d'abord avec vos documents les plus récents.
 - **Le reste entre à la demande.** Quand une question porte sur un fichier catalogué, l'app l'envoie à ce moment-là, cherche dedans, et répond. S'il n'y a plus de place, le document indexé le plus ancien cède la sienne — il reviendra de la même façon le jour où vous en aurez besoin.
 
 Concrètement : vos 10 Go sont tous cherchables, et vous ne payez l'indexation que de ce qui sert vraiment. Une réindexation coûte quelques centimes, jamais plus.
@@ -113,7 +113,7 @@ L'historique occupe une barre latérale repliable, et en paysage large la synth�
 2. Si la même question a déjà reçu une réponse **il y a moins de sept jours**, le résultat est réutilisé directement, sans rien dépenser. Un bouton **Relancer** reste disponible.
 3. Si la question est **proche sans être identique**, une carte vous propose : **Réutiliser**, **Compléter** (ne relancer que ce qui manque, en gardant la moitié déjà obtenue), ou **Nouvelle recherche**. Seule l'analyse de la question a été payée à ce stade — environ un demi-millième de dollar ; la recherche elle-même, qui coûte dix fois plus, attend votre choix.
 4. Une question portant sur l'actualité n'est **jamais** réutilisée automatiquement.
-5. Chaque recherche affiche son coût. L'historique affiche le total du mois. Au **plafond** (15 $ par défaut, modifiable), les appels payants s'arrêtent : l'historique reste consultable et l'app vous le dit clairement.
+5. Chaque recherche affiche son coût. L'historique affiche le total du mois. Au **plafond** (5 $ par défaut, modifiable), les appels payants s'arrêtent : l'historique reste consultable et l'app vous le dit clairement.
 
 ---
 

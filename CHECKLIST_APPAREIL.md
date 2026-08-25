@@ -89,10 +89,10 @@ et le corpus y est plafonné à 1 Go. Avec la facturation activée, ces deux poi
 
 **Attendu :** le nouveau fichier apparaît et s'indexe seul, sans rien faire.
 
-18 bis. **Si votre corpus dépasse le budget** (le cas d'un dossier de plus de 3 Go) : laissez le
+18 bis. **Si votre corpus dépasse le budget** (le cas d'un dossier de plus de 2 Go) : laissez le
 scan aller jusqu'au bout, puis regardez l'en-tête de la section *Indexés* dans **Mes fichiers**.
 
-**Attendu :** « Indexés (N) — 3 Go sur 3 Go », un message expliquant que le reste attend au
+**Attendu :** « Indexés (N) — 2 Go sur 2 Go », un message expliquant que le reste attend au
 catalogue, et **aucune erreur**. Les fichiers catalogués doivent rester nombreux et visibles.
 
 **Puis le vrai test :** posez une question dont la réponse se trouve dans un fichier **catalogué et
@@ -101,7 +101,8 @@ document plus ancien, et répondre en citant le bon fichier. Si elle répond « 
 alors que le fichier existe, dites-le-moi : c'est le niveau 3 qui n'a pas fonctionné.
 
 Le budget se règle dans **Réglages › Corpus**. Montez-le si vous voulez indexer davantage, en
-gardant à l'esprit que 3 Go de documents occupent déjà les 10 Go que Google accorde.
+gardant à l'esprit que 3 Go de documents occupent déjà les 10 Go que Google accorde — et que le
+plafond mensuel de dépense, à 5 $ au départ, arrêtera de toute façon l'indexation avant lui.
 
 ---
 

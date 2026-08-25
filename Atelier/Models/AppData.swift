@@ -11,13 +11,15 @@ struct AppSettings: Codable, Sendable {
     var storeName: String = ""
     var webLevel: WebLevel = .standard
     var priority: SourcePriority = .filesFirst
-    var monthlyCapUSD: Double = 15
+    /// Plafond volontairement bas au départ : mieux vaut le relever en connaissance de cause
+    /// que découvrir une facture. Zéro désactive la limite.
+    var monthlyCapUSD: Double = 5
     /// Budget du corpus indexé, en octets **bruts**. Google plafonne un store à 10 Go au palier 1,
     /// et l'empreinte réelle vaut environ trois fois la taille des données brutes : trois giga-octets
     /// de documents remplissent donc déjà ce quota. Au-delà du budget, les fichiers restent au
     /// catalogue — cherchables par leur nom, gratuits — et entrent dans le corpus à la demande,
     /// en prenant la place des plus anciennement indexés.
-    var corpusBudgetBytes: Int64 = 3 * 1024 * 1024 * 1024
+    var corpusBudgetBytes: Int64 = 2 * 1024 * 1024 * 1024
     /// Mois déjà signalé à 80 % du plafond, pour ne prévenir qu'une fois.
     var alerted80Month: String = ""
     var dictationHintShown: Bool = false
