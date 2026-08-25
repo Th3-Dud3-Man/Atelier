@@ -10,7 +10,10 @@ import Observation
 final class NetworkMonitor {
     private(set) var isOnline = true
 
-    private let monitor = NWPathMonitor()
+    // Le deinit d'une classe isolée sur un acteur est lui-même nonisolated et ne peut atteindre
+    // qu'une propriété Sendable. NWPathMonitor ne l'est pas ; l'annotation est sûre ici :
+    // la propriété est constante, et cancel() est conçu pour être appelé de n'importe où.
+    nonisolated(unsafe) private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "fr.latelier.network")
 
     init() {

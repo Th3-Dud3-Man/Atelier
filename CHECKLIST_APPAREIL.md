@@ -122,7 +122,12 @@ Suivez-la dans l'ordre. À chaque étape : ce qu'il faut voir, et quoi faire sin
 
 25. **Le test de l'anti-dépense** : reposez, avec d'autres mots, une question déjà posée il y a moins d'une semaine.
 
-**Attendu :** soit le résultat est réutilisé immédiatement avec la mention « aucune nouvelle dépense » et un bouton **Relancer**, soit une carte propose **Réutiliser / Compléter / Nouvelle recherche**. Dans les deux cas, **rien n'a été dépensé avant votre choix**.
+**Attendu :** deux comportements possibles, selon la proximité des deux formulations.
+
+- *Question strictement équivalente* : le résultat est réutilisé immédiatement, la mention indique « aucune dépense », et un bouton **Relancer** reste disponible. Cette voie est **entièrement gratuite** : elle est décidée sur l'appareil, sans aucun appel.
+- *Question proche sans être identique* : une carte propose **Réutiliser / Compléter / Nouvelle recherche**. Ici, l'analyse de votre question a bien eu lieu — c'est elle qui a reconnu le doublon — et elle coûte environ 0,0005 $. **Aucune recherche n'est lancée avant votre choix** : c'est la dépense principale, celle qui est évitée.
+
+Vérifiez aussi que **Relancer** relance vraiment (le coût affiché doit augmenter) et que **Compléter** conserve la moitié déjà obtenue au lieu de tout refaire.
 
 26. Vérifiez le coût affiché sous la question, et le total du mois en tête de l'historique.
 

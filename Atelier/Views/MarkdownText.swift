@@ -53,7 +53,7 @@ struct MarkdownText: View {
         }
         .tint(Color.atelierAccent)
         .environment(\.openURL, OpenURLAction { url in
-            guard url.scheme == "atelier", url.host == "cite" else { return .systemAction }
+            guard url.scheme == "atelier", url.host() == "cite" else { return .systemAction }
             onCitation(url.lastPathComponent)
             return .handled
         })

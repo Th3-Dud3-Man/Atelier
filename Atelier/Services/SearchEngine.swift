@@ -11,6 +11,11 @@ protocol FileIndexing: Sendable {
 }
 
 /// Conduit une recherche de bout en bout et publie son avancement pour l'écran de résultats.
+///
+/// Une règle traverse tout ce fichier : **chaque écriture est rattachée à l'identifiant de la
+/// recherche qui l'a demandée**. Une recherche annulée peut encore être suspendue dans un `await`
+/// quand la suivante démarre ; sans ce garde-fou, son coût et son avancement viendraient s'écrire
+/// sur la nouvelle.
 @MainActor
 @Observable
 final class SearchEngine {
@@ -28,7 +33,7 @@ final class SearchEngine {
         case canceled
     }
 
-    /// Carte affichée avant tout appel payant quand une recherche très proche existe déjà.
+    /// Carte affichée quand une recherche très proche existe déjà.
     struct DuplicatePrompt: Equatable {
         var previous: SearchRecord
         var addedConstraints: [String]
@@ -46,6 +51,8 @@ final class SearchEngine {
     /// Question de clarification quand la demande est réellement inintelligible.
     /// Ce n'est pas une erreur : elle s'affiche comme une question, pas comme un échec.
     private(set) var clarification: String?
+    /// Plafond atteint. État distinct d'une erreur : réessayer ne servirait à rien.
+    private(set) var capBlocked: String?
     /// Avertissement de budget, montré une seule fois quand 80 % du plafond est franchi.
     private(set) var budgetWarning: String?
     private(set) var duplicatePrompt: DuplicatePrompt?
@@ -64,8 +71,8 @@ final class SearchEngine {
     private let store: AppStore
     private let indexer: FileIndexing?
     private var task: Task<Void, Never>?
-    /// Mémorisé pour pouvoir reprendre après le choix de l'utilisateur sur la carte de doublon.
-    private var pendingRun: (question: String, mode: SourceMode, analysis: QueryAnalysis)?
+    /// Mémorisé pour reprendre après le choix de l'utilisateur sur la carte de doublon.
+    private var pendingRun: (question: String, mode: SourceMode, analysis: QueryAnalysis, runID: String)?
 
     init(store: AppStore, indexer: FileIndexing? = nil) {
         self.store = store
@@ -85,19 +92,39 @@ final class SearchEngine {
         PerplexityClient(apiKey: Keychain.get(.perplexity))
     }
 
+    // ── Écriture rattachée à une recherche ───────────────────────────
+
+    /// Vrai tant que la recherche `runID` est bien celle affichée.
+    private func isCurrent(_ runID: String) -> Bool {
+        record?.id == runID
+    }
+
+    /// Modifie la recherche en cours, et seulement si c'est bien celle qui le demande.
+    @discardableResult
+    private func mutate(_ runID: String, _ change: (inout SearchRecord) -> Void) -> Bool {
+        guard var current = record, current.id == runID else { return false }
+        change(&current)
+        record = current
+        return true
+    }
+
+    private func setStatus(_ runID: String, phase newPhase: Phase, text: String) {
+        guard isCurrent(runID) else { return }
+        phase = newPhase
+        statusText = text
+    }
+
     // ── Lancement ────────────────────────────────────────────────────
 
-    func start(question: String, mode: SourceMode, rawTranscript: String? = nil) {
+    /// - Parameter allowReuse: mettre à faux pour forcer une vraie recherche.
+    ///   « Relancer », « Compléter sur Internet » et « Approfondir » passent par là : sans cela,
+    ///   la question étant identique, la réutilisation gratuite les rendrait sans effet.
+    func start(question: String, mode: SourceMode, rawTranscript: String? = nil, allowReuse: Bool = true) {
         let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
         cancel()
-        errorText = nil
-        clarification = nil
-        budgetWarning = nil
-        duplicatePrompt = nil
-        pendingFollowUp = nil
-        pendingRun = nil
+        clearTransientState()
 
         var fresh = SearchRecord(question: trimmed)
         fresh.rawTranscript = rawTranscript
@@ -105,24 +132,37 @@ final class SearchEngine {
         fresh.priority = store.settings.priority
         fresh.webLevel = mode == .files ? nil : store.settings.webLevel
         record = fresh
+        // Enregistrée dès sa création : une recherche interrompue par une fermeture de l'app
+        // ne doit pas disparaître de l'historique en laissant son coût au compteur.
+        store.upsert(fresh)
 
+        let runID = fresh.id
         task = Task { [weak self] in
-            await self?.run(question: trimmed, mode: mode)
+            await self?.run(question: trimmed, mode: mode, runID: runID, allowReuse: allowReuse)
         }
+    }
+
+    private func clearTransientState() {
+        errorText = nil
+        clarification = nil
+        capBlocked = nil
+        budgetWarning = nil
+        duplicatePrompt = nil
+        pendingFollowUp = nil
+        pendingRun = nil
     }
 
     func cancel() {
         task?.cancel()
         task = nil
-        if isRunning {
-            phase = .canceled
-            statusText = "Recherche arrêtée."
-            isStreaming = false
-            if var current = record, current.status == .running {
-                current.status = current.synthesis.isEmpty ? .canceled : .partial
-                record = current
-                store.upsert(current)
-            }
+        guard isRunning else { return }
+        phase = .canceled
+        statusText = "Recherche arrêtée."
+        isStreaming = false
+        if var current = record, current.status == .running {
+            current.status = current.synthesis.isEmpty ? .canceled : .partial
+            record = current
+            store.upsert(current)
         }
     }
 
@@ -132,29 +172,38 @@ final class SearchEngine {
         record = nil
         phase = .idle
         statusText = ""
-        errorText = nil
-        clarification = nil
-        budgetWarning = nil
-        duplicatePrompt = nil
-        pendingFollowUp = nil
-        pendingRun = nil
+        clearTransientState()
     }
 
-    /// Rejoue la recherche en cours, à l'identique.
+    /// Rejoue la recherche en cours, pour de vrai.
     func retry() {
         guard let current = record else { return }
-        start(question: current.question, mode: current.sourceMode)
+        start(question: current.question, mode: current.sourceMode, allowReuse: false)
+    }
+
+    /// Relance en ajoutant Internet à un résultat obtenu sur les seuls fichiers.
+    func completeWithWeb() {
+        guard let current = record else { return }
+        start(question: current.question, mode: .web, allowReuse: false)
+    }
+
+    /// Relance au niveau approfondi.
+    func deepen() {
+        guard let current = record else { return }
+        store.updateSettings { $0.webLevel = .deep }
+        start(question: current.question, mode: current.effectiveSource, allowReuse: false)
     }
 
     // ── Déroulé ──────────────────────────────────────────────────────
 
-    private func run(question: String, mode: SourceMode) async {
+    private func run(question: String, mode: SourceMode, runID: String, allowReuse: Bool) async {
         do {
             // 1. Étape gratuite : la même question a-t-elle déjà reçu une réponse ?
-            if let match = Dedupe.exactMatch(for: question, in: store.searches),
+            if allowReuse,
+               let match = Dedupe.exactMatch(for: question, in: store.searches.filter({ $0.id != runID })),
                match.isFresh,
                !(match.record.analysis?.isRecentInfo ?? false) {
-                reuse(match.record, automatic: true)
+                reuse(match.record, runID: runID, automatic: true)
                 return
             }
 
@@ -163,37 +212,33 @@ final class SearchEngine {
                                message: "Aucune clé Gemini n'est enregistrée.")
             }
 
-            // 2. Plafond mensuel : la vérification vient AVANT l'analyse, qui est déjà un
-            // appel payant. La réutilisation ci-dessus, elle, reste possible : elle ne coûte rien.
+            // 2. Plafond mensuel. La vérification vient AVANT l'analyse, qui est elle-même
+            // un appel payant. La réutilisation ci-dessus reste possible : elle ne coûte rien.
             if store.capReached {
-                stopAtCap()
+                stopAtCap(runID: runID)
                 return
             }
 
             // 3. Analyse : un seul appel, qui décide aussi de la source et juge le doublon.
-            phase = .analyzing
-            statusText = "Analyse de la question…"
-            let analysis = try await analyze(question: question)
+            setStatus(runID, phase: .analyzing, text: "Analyse de la question…")
+            let analysis = try await analyze(question: question, runID: runID)
             try Task.checkCancellation()
+            guard isCurrent(runID) else { return }
 
-            if var current = record {
-                current.analysis = analysis
-                record = current
-            }
+            mutate(runID) { $0.analysis = analysis }
 
-            // Question inintelligible : on demande une précision plutôt que de dépenser
-            // en recherches. L'analyse, elle, a déjà été payée — c'est inévitable.
-            if analysis.needsClarification, let question = analysis.clarificationQuestion, !question.isEmpty {
+            // Question inintelligible : on demande une précision plutôt que de dépenser davantage.
+            if analysis.needsClarification, let precision = analysis.clarificationQuestion, !precision.isEmpty {
                 phase = .done
                 statusText = ""
-                clarification = question
-                finish(status: .partial)
+                clarification = precision
+                finish(runID: runID, status: .partial)
                 return
             }
 
-            // 4. Doublon jugé par le modèle : on demande avant de dépenser.
-            if let previous = duplicateCandidate(from: analysis), !analysis.isRecentInfo {
-                pendingRun = (question, mode, analysis)
+            // 4. Doublon jugé par le modèle : on demande avant d'aller plus loin.
+            if allowReuse, let previous = duplicateCandidate(from: analysis), !analysis.isRecentInfo {
+                pendingRun = (question, mode, analysis, runID)
                 duplicatePrompt = DuplicatePrompt(
                     previous: previous,
                     addedConstraints: analysis.addedConstraints,
@@ -204,12 +249,14 @@ final class SearchEngine {
                 return
             }
 
-            try await proceed(question: question, mode: mode, analysis: analysis, forceWeb: false)
+            try await proceed(question: question, mode: mode, analysis: analysis, runID: runID, forceWeb: false)
         } catch is CancellationError {
-            phase = .canceled
-            statusText = "Recherche arrêtée."
+            if isCurrent(runID) {
+                phase = .canceled
+                statusText = "Recherche arrêtée."
+            }
         } catch {
-            fail(with: error)
+            fail(with: error, runID: runID)
         }
     }
 
@@ -218,35 +265,45 @@ final class SearchEngine {
         guard let pending = pendingRun, let prompt = duplicatePrompt else { return }
         duplicatePrompt = nil
         pendingRun = nil
+        guard isCurrent(pending.runID) else { return }
 
         switch choice {
         case .reuse:
-            reuse(prompt.previous, automatic: false)
+            reuse(prompt.previous, runID: pending.runID, automatic: false)
+
         case .complete:
-            // Ce qui manque, c'est ce que la recherche précédente n'a pas fait.
-            let missing: SourceMode = prompt.previous.webSources.isEmpty ? .web : .files
-            task = Task { [weak self] in
-                guard let self else { return }
-                do {
-                    try await proceed(question: pending.question, mode: missing,
-                                      analysis: pending.analysis, forceWeb: missing == .web)
-                } catch is CancellationError {
-                    self.phase = .canceled
-                } catch {
-                    self.fail(with: error)
-                }
+            // On garde la moitié déjà obtenue et on ne relance que ce qui manque.
+            let previousHasWeb = !prompt.previous.webSources.isEmpty
+            let missing: SourceMode = previousHasWeb ? .files : .web
+            let kept = previousHasWeb ? prompt.previous.webSources : prompt.previous.localSources
+            mutate(pending.runID) { record in
+                record.sources = kept
+                record.reusedFromID = prompt.previous.id
             }
+            launch(pending, mode: missing, forceWeb: missing == .web, keeping: kept)
+
         case .new:
-            task = Task { [weak self] in
-                guard let self else { return }
-                do {
-                    try await proceed(question: pending.question, mode: pending.mode,
-                                      analysis: pending.analysis, forceWeb: false)
-                } catch is CancellationError {
-                    self.phase = .canceled
-                } catch {
-                    self.fail(with: error)
-                }
+            launch(pending, mode: pending.mode, forceWeb: false, keeping: [])
+        }
+    }
+
+    private func launch(
+        _ pending: (question: String, mode: SourceMode, analysis: QueryAnalysis, runID: String),
+        mode: SourceMode,
+        forceWeb: Bool,
+        keeping: [SourceRef]
+    ) {
+        task = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.proceed(
+                    question: pending.question, mode: mode, analysis: pending.analysis,
+                    runID: pending.runID, forceWeb: forceWeb, keeping: keeping
+                )
+            } catch is CancellationError {
+                if self.isCurrent(pending.runID) { self.phase = .canceled }
+            } catch {
+                self.fail(with: error, runID: pending.runID)
             }
         }
     }
@@ -261,104 +318,133 @@ final class SearchEngine {
         return previous
     }
 
-    /// Réutilise un résultat précédent : aucun appel, aucun coût.
-    private func reuse(_ previous: SearchRecord, automatic: Bool) {
-        guard var current = record else { return }
-        current.synthesis = previous.synthesis
-        current.sources = previous.sources
-        current.effectiveSource = previous.effectiveSource
-        current.webLevel = previous.webLevel
-        current.models = previous.models
-        current.costUSD = 0
-        current.reusedFromID = previous.id
-        current.status = .done
-        record = current
-        store.upsert(current)
+    /// Réutilise un résultat précédent. Aucune nouvelle recherche n'est lancée ; le coût déjà
+    /// engagé (l'analyse, quand la carte de doublon a été montrée) reste compté, il a bien eu lieu.
+    private func reuse(_ previous: SearchRecord, runID: String, automatic: Bool) {
+        let applied = mutate(runID) { current in
+            current.synthesis = previous.synthesis
+            current.sources = previous.sources
+            current.effectiveSource = previous.effectiveSource
+            current.webLevel = previous.webLevel
+            current.models = previous.models
+            current.reusedFromID = previous.id
+            current.status = .done
+        }
+        guard applied else { return }
+        persist(runID)
         phase = .done
         statusText = automatic
-            ? "Résultat réutilisé, sans nouvelle dépense."
+            ? "Résultat réutilisé : aucune recherche n'a été relancée."
             : "Résultat précédent réutilisé."
     }
 
     // ── Cœur : recherche puis synthèse ───────────────────────────────
 
-    private func proceed(question: String, mode: SourceMode, analysis: QueryAnalysis, forceWeb: Bool) async throws {
+    private func proceed(
+        question: String,
+        mode: SourceMode,
+        analysis: QueryAnalysis,
+        runID: String,
+        forceWeb: Bool,
+        keeping: [SourceRef] = []
+    ) async throws {
+        guard isCurrent(runID) else { return }
+
         let resolved = resolveSource(requested: mode, analysis: analysis, forceWeb: forceWeb)
-        if var current = record {
-            current.effectiveSource = resolved
-            current.webLevel = resolved == .files ? nil : store.settings.webLevel
-            record = current
+        mutate(runID) { current in
+            // En mode « Compléter », la source affichée reflète les deux moitiés.
+            current.effectiveSource = keeping.isEmpty ? resolved : .both
+            current.webLevel = resolved == .files ? nil : self.store.settings.webLevel
         }
 
-        // Le plafond a pu être franchi entre-temps, par exemple par une question de suite.
+        // Le plafond a pu être franchi entre-temps, par une question de suite par exemple.
         if store.capReached {
-            stopAtCap()
+            stopAtCap(runID: runID)
             return
         }
 
-        var localSources: [SourceRef] = []
-        var webSources: [SourceRef] = []
+        var localSources = keeping.filter { $0.kind == .local }
+        var webSources = keeping.filter { $0.kind == .web }
         var agentAnswer = ""
 
         let wantsFiles = resolved == .files || resolved == .both
         let wantsWeb = resolved == .web || resolved == .both
 
         if wantsFiles && wantsWeb && store.settings.priority == .parallel {
-            phase = .searchingFiles
-            statusText = "Recherche dans vos fichiers et sur Internet…"
-            async let files = searchFiles(analysis: analysis)
-            async let web = searchWeb(analysis: analysis, question: question)
+            setStatus(runID, phase: .searchingFiles, text: "Recherche dans vos fichiers et sur Internet…")
+            async let files = searchFiles(analysis: analysis, runID: runID)
+            async let web = searchWeb(analysis: analysis, question: question, runID: runID)
             let (filesResult, webResult) = try await (files, web)
             localSources = filesResult
             webSources = webResult.sources
             agentAnswer = webResult.answer
         } else if store.settings.priority == .webFirst {
             if wantsWeb {
-                let result = try await runWeb(analysis: analysis, question: question)
+                setStatus(runID, phase: .searchingWeb, text: webStatusText)
+                let result = try await searchWeb(analysis: analysis, question: question, runID: runID)
                 webSources = result.sources
                 agentAnswer = result.answer
             }
             if wantsFiles {
-                localSources = try await runFiles(analysis: analysis)
+                setStatus(runID, phase: .searchingFiles, text: "Recherche dans vos fichiers…")
+                localSources = try await searchFiles(analysis: analysis, runID: runID)
             }
         } else {
             if wantsFiles {
-                localSources = try await runFiles(analysis: analysis)
+                setStatus(runID, phase: .searchingFiles, text: "Recherche dans vos fichiers…")
+                localSources = try await searchFiles(analysis: analysis, runID: runID)
             }
             if wantsWeb {
-                let result = try await runWeb(analysis: analysis, question: question)
+                setStatus(runID, phase: .searchingWeb, text: webStatusText)
+                let result = try await searchWeb(analysis: analysis, question: question, runID: runID)
                 webSources = result.sources
                 agentAnswer = result.answer
             }
         }
 
-        // Niveau 3 du Smart Search, quelle que soit la priorité choisie : si l'analyse a repéré
-        // un fichier catalogué qui concerne manifestement la question et que la moisson est
-        // maigre, l'app le lit, l'indexe et refait la recherche en l'incluant.
+        // Niveau 3 du Smart Search, quelle que soit la priorité : si l'analyse a repéré un fichier
+        // catalogué qui concerne manifestement la question et que la moisson est maigre, l'app le
+        // lit, l'indexe et refait la recherche en l'incluant.
         if wantsFiles {
-            localSources = try await indexCandidatesIfNeeded(analysis: analysis, currentSources: localSources)
+            localSources = try await indexCandidatesIfNeeded(
+                analysis: analysis, currentSources: localSources, runID: runID
+            )
         }
 
         try Task.checkCancellation()
+        guard isCurrent(runID) else { return }
 
-        var sources = localSources
-        sources.append(contentsOf: webSources)
-        if var current = record {
-            current.sources = sources
-            record = current
-        }
+        // Renumérotation finale : les marqueurs donnés au rédacteur doivent être exactement
+        // ceux des cartes affichées, sans quoi chaque citation pointerait à côté.
+        localSources = renumber(localSources, prefix: "L")
+        webSources = renumber(webSources, prefix: "W")
+        mutate(runID) { $0.sources = localSources + webSources }
 
         try await synthesize(
-            question: question, analysis: analysis,
+            question: question, analysis: analysis, runID: runID,
             localSources: localSources, webSources: webSources, agentAnswer: agentAnswer
         )
+    }
+
+    private var webStatusText: String {
+        store.settings.webLevel == .deep
+            ? "Recherche approfondie sur Internet…"
+            : "Recherche sur Internet…"
+    }
+
+    private func renumber(_ sources: [SourceRef], prefix: String) -> [SourceRef] {
+        sources.enumerated().map { index, source in
+            var copy = source
+            copy.tag = "\(prefix)\(index + 1)"
+            return copy
+        }
     }
 
     private func resolveSource(requested: SourceMode, analysis: QueryAnalysis, forceWeb: Bool) -> SourceMode {
         if forceWeb { return .web }
         var resolved = requested == .auto ? analysis.resolvedSource : requested
-        // Sans clé Perplexity ou sans corpus, une source devient impossible : on le dit plus tard,
-        // mais on ne lance pas un appel voué à l'échec.
+        // Sans clé Perplexity ou sans corpus, une source devient impossible : plutôt que de lancer
+        // un appel voué à l'échec, on bascule sur celle qui reste.
         let hasWeb = !Keychain.get(.perplexity).isEmpty
         let hasCorpus = !store.settings.storeName.isEmpty && !store.indexedFiles.isEmpty
         if !hasWeb && resolved == .both { resolved = .files }
@@ -368,24 +454,10 @@ final class SearchEngine {
         return resolved
     }
 
-    private func runFiles(analysis: QueryAnalysis) async throws -> [SourceRef] {
-        phase = .searchingFiles
-        statusText = "Recherche dans vos fichiers…"
-        return try await searchFiles(analysis: analysis)
-    }
-
-    private func runWeb(analysis: QueryAnalysis, question: String) async throws -> (sources: [SourceRef], answer: String) {
-        phase = .searchingWeb
-        statusText = store.settings.webLevel == .deep
-            ? "Recherche approfondie sur Internet…"
-            : "Recherche sur Internet…"
-        return try await searchWeb(analysis: analysis, question: question)
-    }
-
     // ── Appels ───────────────────────────────────────────────────────
 
-    private func analyze(question: String) async throws -> QueryAnalysis {
-        let unindexed = store.catalogedFiles
+    private func analyze(question: String, runID: String) async throws -> QueryAnalysis {
+        let unindexed = store.files
             .filter { $0.status == .cataloged }
             .sorted { $0.modified > $1.modified }
             .prefix(300)
@@ -393,7 +465,7 @@ final class SearchEngine {
 
         let prompt = Prompts.analysisPrompt(
             question: question,
-            recent: Array(store.searches.filter { $0.status == .done }.prefix(30)),
+            recent: Array(store.searches.filter { $0.status == .done && $0.id != runID }.prefix(30)),
             unindexedNames: Array(unindexed)
         )
 
@@ -402,7 +474,7 @@ final class SearchEngine {
             prompt: prompt,
             schema: Prompts.analysisSchema
         )
-        recordCost(provider: "Gemini", model: result.model, usage: result.usage, note: "analyse")
+        recordCost(runID: runID, provider: "Gemini", model: result.model, usage: result.usage, note: "analyse")
         let json = GeminiClient.parseJSONObject(result.text) ?? [:]
         return Self.decodeAnalysis(json, fallbackQuery: question)
     }
@@ -429,11 +501,11 @@ final class SearchEngine {
         return analysis
     }
 
-    private func searchFiles(analysis: QueryAnalysis) async throws -> [SourceRef] {
+    private func searchFiles(analysis: QueryAnalysis, runID: String) async throws -> [SourceRef] {
         guard !store.settings.storeName.isEmpty else { return [] }
 
-        // La requête sémantique est enrichie des citations probables : c'est ce qui permet de
-        // retrouver un passage dont la formulation ne reprend pas les mots de la question.
+        // La requête est enrichie des citations probables : c'est ce qui permet de retrouver un
+        // passage dont la formulation ne reprend pas les mots de la question.
         var query = analysis.fileQuery
         if !analysis.probableQuotes.isEmpty {
             query += "\nFormulations possibles : " + analysis.probableQuotes.joined(separator: " / ")
@@ -443,14 +515,11 @@ final class SearchEngine {
         }
 
         let reply = try await gemini.searchFiles(query: query)
-        recordCost(provider: "Gemini", model: reply.model, usage: reply.usage, note: "recherche fichiers")
-        return sources(from: reply.passages, startingAt: 1)
-    }
-
-    private func sources(from passages: [GeminiClient.Passage], startingAt start: Int) -> [SourceRef] {
-        passages.enumerated().map { index, passage in
+        recordCost(runID: runID, provider: "Gemini", model: reply.model,
+                   usage: reply.usage, note: "recherche fichiers")
+        return reply.passages.map { passage in
             SourceRef(
-                tag: "L\(start + index)",
+                tag: "L?",
                 kind: .local,
                 title: passage.title,
                 excerpt: passage.text,
@@ -462,7 +531,11 @@ final class SearchEngine {
         }
     }
 
-    private func searchWeb(analysis: QueryAnalysis, question: String) async throws -> (sources: [SourceRef], answer: String) {
+    private func searchWeb(
+        analysis: QueryAnalysis,
+        question: String,
+        runID: String
+    ) async throws -> (sources: [SourceRef], answer: String) {
         guard !Keychain.get(.perplexity).isEmpty else { return ([], "") }
         let level = store.settings.webLevel
         let prices = store.settings.prices
@@ -482,14 +555,14 @@ final class SearchEngine {
             provider: "Perplexity",
             model: level == .deep ? "agent" : "search",
             usd: outcome.costUSD,
-            searchID: record?.id,
+            searchID: runID,
             note: outcome.costIsMeasured ? "coût facturé" : "coût estimé"
         ))
-        addCost(outcome.costUSD)
+        addCost(runID: runID, outcome.costUSD)
 
-        let sources = outcome.results.enumerated().map { index, result in
+        let sources = outcome.results.map { result in
             SourceRef(
-                tag: "W\(index + 1)",
+                tag: "W?",
                 kind: .web,
                 title: result.title,
                 excerpt: String(result.snippet.prefix(1500)),
@@ -502,30 +575,30 @@ final class SearchEngine {
         return (sources, outcome.agentAnswer)
     }
 
-    /// Niveau 3 du Smart Search : si l'analyse a repéré un fichier catalogué mais non indexé,
-    /// l'app le lit, l'indexe et relance la recherche en l'incluant. Rien à faire pour l'utilisateur.
+    /// Niveau 3 du Smart Search : l'app lit, indexe et relance seule. Rien à faire pour l'utilisateur.
     private func indexCandidatesIfNeeded(
         analysis: QueryAnalysis,
-        currentSources: [SourceRef]
+        currentSources: [SourceRef],
+        runID: String
     ) async throws -> [SourceRef] {
         guard store.settings.autoIndexSuggested,
               let indexer,
-              !analysis.candidateFiles.isEmpty
+              !analysis.candidateFiles.isEmpty,
+              // On ne dérange le corpus que si la recherche n'a rien donné de solide.
+              currentSources.count < 3
         else { return currentSources }
 
-        // On ne dérange le corpus que si la recherche n'a rien donné de solide.
-        guard currentSources.count < 3 else { return currentSources }
-
-        let candidates = store.catalogedFiles.filter { file in
+        let candidates = store.files.filter { file in
             file.status == .cataloged && analysis.candidateFiles.contains { candidate in
                 file.name.compare(candidate, options: .caseInsensitive) == .orderedSame
             }
         }
         guard !candidates.isEmpty else { return currentSources }
 
-        phase = .indexing
+        setStatus(runID, phase: .indexing, text: "")
         var indexed: [String] = []
         for file in candidates.prefix(3) {
+            guard isCurrent(runID) else { return currentSources }
             statusText = "Ajout de « \(file.name) » à l'index…"
             do {
                 if try await indexer.indexOnDemand(fileID: file.id) {
@@ -536,35 +609,29 @@ final class SearchEngine {
                 continue
             }
         }
-        guard !indexed.isEmpty else { return currentSources }
+        guard !indexed.isEmpty, isCurrent(runID) else { return currentSources }
 
-        if var current = record {
+        mutate(runID) { current in
             for name in indexed {
                 current.notes.append("« \(name) » a été ajouté à l'index.")
             }
-            record = current
         }
 
-        phase = .searchingFiles
-        statusText = "Nouvelle recherche dans vos fichiers…"
-        return try await searchFiles(analysis: analysis)
+        setStatus(runID, phase: .searchingFiles, text: "Nouvelle recherche dans vos fichiers…")
+        return try await searchFiles(analysis: analysis, runID: runID)
     }
 
     private func synthesize(
         question: String,
         analysis: QueryAnalysis,
+        runID: String,
         localSources: [SourceRef],
         webSources: [SourceRef],
         agentAnswer: String
     ) async throws {
-        phase = .synthesizing
-        statusText = "Rédaction de la synthèse…"
+        setStatus(runID, phase: .synthesizing, text: "Rédaction de la synthèse…")
         isStreaming = true
-
-        if var current = record {
-            current.synthesis = ""
-            record = current
-        }
+        mutate(runID) { $0.synthesis = "" }
 
         let payload = GeminiClient.Request(
             contents: [.init(role: "user", parts: [.init(text: Prompts.synthesisPrompt(
@@ -580,12 +647,10 @@ final class SearchEngine {
 
         do {
             for try await event in gemini.generateStream(model: model, request: payload) {
+                guard isCurrent(runID) else { return }
                 switch event {
                 case .text(let piece):
-                    if var current = record {
-                        current.synthesis += piece
-                        record = current
-                    }
+                    mutate(runID) { $0.synthesis += piece }
                 case .finished(let reply):
                     finalReply = reply
                 }
@@ -597,24 +662,23 @@ final class SearchEngine {
             // Le flux a échoué : on retente une fois sans streaming plutôt que de perdre la recherche.
             isStreaming = false
             let reply = try await gemini.generate(model: model, request: payload)
-            if var current = record {
-                current.synthesis = reply.text
-                record = current
-            }
+            mutate(runID) { $0.synthesis = reply.text }
             finalReply = reply
         }
 
         isStreaming = false
-        budgetWarning = store.consumeBudgetWarning()
+        guard isCurrent(runID) else { return }
+
         if let reply = finalReply {
-            recordCost(provider: "Gemini", model: reply.model, usage: reply.usage, note: "synthèse")
-            if var current = record {
+            recordCost(runID: runID, provider: "Gemini", model: reply.model,
+                       usage: reply.usage, note: "synthèse")
+            mutate(runID) { current in
                 current.models = Array(Set(current.models + [reply.model])).sorted()
-                record = current
             }
         }
 
-        finish(status: .done)
+        budgetWarning = store.consumeBudgetWarning()
+        finish(runID: runID, status: .done)
         statusText = ""
         phase = .done
     }
@@ -627,24 +691,26 @@ final class SearchEngine {
 
         task?.cancel()
         pendingFollowUp = (trimmed, "")
+        let runID = current.id
         task = Task { [weak self] in
             guard let self else { return }
             do {
-                try await self.runFollowUp(trimmed, on: current)
+                try await self.runFollowUp(trimmed, on: current, runID: runID)
             } catch is CancellationError {
                 self.pendingFollowUp = nil
             } catch {
                 self.pendingFollowUp = nil
-                self.errorText = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                if self.isCurrent(runID) {
+                    self.errorText = (error as? APIError)?.errorDescription ?? error.localizedDescription
+                }
             }
         }
     }
 
-    private func runFollowUp(_ question: String, on base: SearchRecord) async throws {
+    private func runFollowUp(_ question: String, on base: SearchRecord, runID: String) async throws {
         guard !store.capReached else {
-            errorText = "Plafond mensuel atteint : les questions de suite reprendront le mois prochain, "
-                + "ou après avoir relevé le plafond dans les réglages."
             pendingFollowUp = nil
+            capBlocked = capMessage
             return
         }
 
@@ -663,6 +729,7 @@ final class SearchEngine {
         var text = ""
         var reply: GeminiClient.Reply?
         for try await event in gemini.generateStream(model: store.settings.mainModel, request: payload) {
+            guard isCurrent(runID) else { return }
             switch event {
             case .text(let piece):
                 text += piece
@@ -672,19 +739,19 @@ final class SearchEngine {
             }
         }
 
+        guard isCurrent(runID) else { return }
+
         var turn = FollowUpTurn(question: question)
         turn.answer = text
         if let reply {
-            let cost = CostModel.gemini(model: reply.model, usage: reply.usage, prices: store.settings.prices)
-            turn.costUSD = cost
-            recordCost(provider: "Gemini", model: reply.model, usage: reply.usage, note: "question de suite")
+            turn.costUSD = CostModel.gemini(model: reply.model, usage: reply.usage, prices: store.settings.prices)
+            recordCost(runID: runID, provider: "Gemini", model: reply.model,
+                       usage: reply.usage, note: "question de suite")
         }
 
-        if var current = record {
-            current.followUps.append(turn)
-            record = current
-            store.upsert(current)
-        }
+        mutate(runID) { $0.followUps.append(turn) }
+        persist(runID)
+        budgetWarning = store.consumeBudgetWarning()
         pendingFollowUp = nil
     }
 
@@ -692,65 +759,75 @@ final class SearchEngine {
 
     func open(_ existing: SearchRecord) {
         cancel()
+        clearTransientState()
         record = existing
         phase = existing.status == .done ? .done : .failed
         statusText = ""
         errorText = existing.errorMessage
-        duplicatePrompt = nil
-        pendingFollowUp = nil
     }
 
     // ── Utilitaires ──────────────────────────────────────────────────
 
-    private func recordCost(provider: String, model: String, usage: TokenUsage, note: String) {
-        let amount = note == "transcription"
-            ? CostModel.geminiAudio(model: model, usage: usage, prices: store.settings.prices)
-            : CostModel.gemini(model: model, usage: usage, prices: store.settings.prices)
+    private func recordCost(runID: String, provider: String, model: String, usage: TokenUsage, note: String) {
+        let amount = CostModel.gemini(model: model, usage: usage, prices: store.settings.prices)
         store.record(CostEntry(
             provider: provider,
             model: model,
             usd: amount,
             tokensIn: usage.inputTokens,
             tokensOut: usage.outputTokens,
-            searchID: record?.id,
+            searchID: runID,
             note: note
         ))
-        addCost(amount)
+        addCost(runID: runID, amount)
     }
 
-    private func addCost(_ amount: Double) {
-        guard var current = record else { return }
-        current.costUSD += amount
-        record = current
+    /// Le coût suit la recherche qui l'a engagé, même si l'écran affiche déjà la suivante.
+    private func addCost(runID: String, _ amount: Double) {
+        if mutate(runID, { $0.costUSD += amount }) {
+            persist(runID)
+        } else if var stale = store.search(id: runID) {
+            stale.costUSD += amount
+            store.upsert(stale)
+        }
     }
 
-    private func finish(status: SearchStatus) {
-        guard var current = record else { return }
-        current.status = status
-        record = current
+    private func persist(_ runID: String) {
+        guard let current = record, current.id == runID else { return }
         store.upsert(current)
     }
 
-    /// Mode gratuit : plus aucun appel payant, mais tout ce qui est déjà là reste consultable.
-    private func stopAtCap() {
-        phase = .failed
-        statusText = ""
-        errorText = "Plafond mensuel atteint (\(CostModel.format(store.settings.monthlyCapUSD))). "
-            + "L'historique et les résultats déjà obtenus restent consultables ; "
-            + "relevez le plafond dans les réglages pour chercher de nouveau."
-        finish(status: .partial)
+    private func finish(runID: String, status: SearchStatus) {
+        mutate(runID) { $0.status = status }
+        persist(runID)
     }
 
-    private func fail(with error: Error) {
-        isStreaming = false
+    private var capMessage: String {
+        "Plafond mensuel atteint (\(CostModel.format(store.settings.monthlyCapUSD))). "
+            + "L'historique et les résultats déjà obtenus restent consultables ; "
+            + "relevez le plafond dans les réglages pour chercher de nouveau."
+    }
+
+    /// Mode gratuit. État distinct d'une erreur : proposer « Réessayer » n'aurait aucun sens.
+    private func stopAtCap(runID: String) {
+        guard isCurrent(runID) else { return }
         phase = .failed
         statusText = ""
-        errorText = (error as? APIError)?.errorDescription ?? error.localizedDescription
-        if var current = record {
+        capBlocked = capMessage
+        finish(runID: runID, status: .partial)
+    }
+
+    private func fail(with error: Error, runID: String) {
+        isStreaming = false
+        guard isCurrent(runID) else { return }
+        phase = .failed
+        statusText = ""
+        let message = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        errorText = message
+        mutate(runID) { current in
             current.status = current.synthesis.isEmpty ? .failed : .partial
-            current.errorMessage = errorText
-            record = current
-            store.upsert(current)
+            current.errorMessage = message
         }
+        persist(runID)
     }
 }

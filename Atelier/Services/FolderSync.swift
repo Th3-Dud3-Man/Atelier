@@ -167,7 +167,7 @@ final class FolderSync: FileIndexing {
             entry.lastSeenAt = .now
 
             if file.size > SupportedTypes.maxFileBytes {
-                entry.status = .unsupported
+                entry.status = .failed
                 entry.errorMessage = "Fichier trop volumineux : la limite de Gemini est de 100 Mo."
             } else if !SupportedTypes.isSupported(file.name) {
                 entry.status = .unsupported
@@ -207,7 +207,9 @@ final class FolderSync: FileIndexing {
 
     /// Envoie les fichiers nouveaux ou modifiés, par lots, en s'arrêtant proprement.
     func indexPending() async {
-        let pending = store.files.filter { $0.status == .cataloged && SupportedTypes.isSupported($0.name) }
+        // `needsIndexing` couvre aussi les échecs précédents : un fichier en erreur, souvent un
+        // téléchargement iCloud qui n'était pas terminé, doit être réessayé au scan suivant.
+        let pending = store.files.filter { $0.needsIndexing && SupportedTypes.isSupported($0.name) }
         guard !pending.isEmpty else { return }
 
         guard !Keychain.get(.gemini).isEmpty else {
@@ -270,6 +272,18 @@ final class FolderSync: FileIndexing {
         do {
             let data = try await Self.readFile(bookmark: folder.bookmark, relativePath: entry.relativePath)
 
+            // La taille annoncée au scan vaut souvent zéro pour un fichier non encore téléchargé :
+            // c'est seulement ici, une fois les octets en main, qu'on peut vraiment la vérifier.
+            let realSize = Int64(data.count)
+            guard realSize <= SupportedTypes.maxFileBytes else {
+                var oversized = entry
+                oversized.size = realSize
+                oversized.status = .failed
+                oversized.errorMessage = "Fichier trop volumineux : la limite de Gemini est de 100 Mo."
+                store.upsert(oversized)
+                return false
+            }
+
             // Un fichier réindexé remplace son ancienne version : sinon le corpus contiendrait
             // deux exemplaires du même texte et les citations deviendraient trompeuses.
             if let previous = entry.storeDocumentName, !previous.isEmpty {
@@ -284,6 +298,7 @@ final class FolderSync: FileIndexing {
             )
 
             var updated = entry
+            updated.size = realSize
             updated.status = .indexed
             updated.storeDocumentName = documentName
             updated.indexedAt = .now
@@ -294,7 +309,7 @@ final class FolderSync: FileIndexing {
             store.record(CostEntry(
                 provider: "Gemini",
                 model: "gemini-embedding-001",
-                usd: CostModel.indexing(bytes: entry.size, prices: store.settings.prices),
+                usd: CostModel.indexing(bytes: realSize, prices: store.settings.prices),
                 searchID: nil,
                 note: "indexation — \(entry.name)"
             ))

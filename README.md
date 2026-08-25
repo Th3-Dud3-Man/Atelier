@@ -99,7 +99,7 @@ L'historique occupe une barre latérale repliable, et en paysage large la synth�
 
 1. **Avant tout appel payant**, elle compare votre question aux précédentes. Deux formulations différentes de la même demande sont reconnues comme identiques.
 2. Si la même question a déjà reçu une réponse **il y a moins de sept jours**, le résultat est réutilisé directement, sans rien dépenser. Un bouton **Relancer** reste disponible.
-3. Si la question est **proche sans être identique**, une carte vous propose : **Réutiliser**, **Compléter** (ne relancer que ce qui manque), ou **Nouvelle recherche**.
+3. Si la question est **proche sans être identique**, une carte vous propose : **Réutiliser**, **Compléter** (ne relancer que ce qui manque, en gardant la moitié déjà obtenue), ou **Nouvelle recherche**. Seule l'analyse de la question a été payée à ce stade — environ un demi-millième de dollar ; la recherche elle-même, qui coûte dix fois plus, attend votre choix.
 4. Une question portant sur l'actualité n'est **jamais** réutilisée automatiquement.
 5. Chaque recherche affiche son coût. L'historique affiche le total du mois. Au **plafond** (15 $ par défaut, modifiable), les appels payants s'arrêtent : l'historique reste consultable et l'app vous le dit clairement.
 

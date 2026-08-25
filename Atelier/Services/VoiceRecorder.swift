@@ -55,7 +55,9 @@ final class VoiceRecorder {
 
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.record, mode: .spokenAudio)
+            // .measurement désactive les traitements d'entrée : c'est le mode prévu pour une
+            // capture destinée à une machine. .spokenAudio est un mode de lecture, incompatible.
+            try session.setCategory(.record, mode: .measurement)
             try session.setActive(true)
         } catch {
             errorText = "Le micro n'a pas pu être activé : \(error.localizedDescription)"
@@ -164,13 +166,18 @@ final class VoiceRecorder {
         store: AppStore,
         onDone: @escaping (String) -> Void
     ) async {
-        phase = .transcribing
-        stateText = "Transcription en cours…"
-        defer {
+        guard !store.capReached else {
             phase = .idle
             stateText = ""
+            errorText = "Plafond mensuel atteint : la transcription reprendra après avoir relevé "
+                + "le plafond dans les réglages."
+            return
         }
 
+        phase = .transcribing
+        stateText = "Transcription en cours…"
+
+        var transcript: String?
         do {
             let reply = try await client.transcribe(audio: audio, mimeType: "audio/wav")
             store.record(CostEntry(
@@ -182,13 +189,20 @@ final class VoiceRecorder {
                 note: "transcription"
             ))
             let text = reply.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else {
+            if text.isEmpty {
                 errorText = "L'enregistrement n'a produit aucun texte."
-                return
+            } else {
+                transcript = text
             }
-            onDone(text)
         } catch {
             errorText = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
+
+        // L'ordre compte : le panneau d'enregistrement doit être refermé AVANT que l'écran de
+        // relecture ne soit demandé, sans quoi deux feuilles se disputent l'affichage et la
+        // transcription disparaît sans un mot.
+        phase = .idle
+        stateText = ""
+        if let transcript { onDone(transcript) }
     }
 }

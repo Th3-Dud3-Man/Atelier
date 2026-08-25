@@ -142,6 +142,15 @@ struct ResultsView: View {
                     )
                 }
 
+                if let capped = engine.capBlocked {
+                    NoticeCard(
+                        title: "Plafond du mois atteint",
+                        message: capped,
+                        actionTitle: "Ouvrir les réglages",
+                        action: { router.showingSettings = true }
+                    )
+                }
+
                 if let error = engine.errorText {
                     NoticeCard(
                         title: "Un appel a échoué",
@@ -154,9 +163,12 @@ struct ResultsView: View {
 
                 if record.reusedFromID != nil {
                     NoticeCard(
-                        message: "Ce résultat reprend une recherche précédente : aucune nouvelle dépense.",
+                        message: record.costUSD > 0
+                            ? "Ce résultat reprend une recherche précédente : seule l'analyse de votre "
+                                + "question a été facturée (\(CostModel.format(record.costUSD)))."
+                            : "Ce résultat reprend une recherche précédente : aucune dépense.",
                         actionTitle: "Relancer",
-                        action: { engine.start(question: record.question, mode: record.sourceMode) }
+                        action: { engine.retry() }
                     )
                 }
             }
@@ -281,17 +293,13 @@ struct ResultsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     if record.effectiveSource == .files && !Keychain.get(.perplexity).isEmpty {
-                        Button("Compléter sur Internet") {
-                            engine.start(question: record.question, mode: .web)
-                        }
-                        .buttonStyle(.bordered)
+                        Button("Compléter sur Internet") { engine.completeWithWeb() }
+                            .buttonStyle(.bordered)
                     }
                     if record.effectiveSource != .files && store.settings.webLevel != .deep {
-                        Button("Approfondir (\(CostModel.format(CostModel.perplexityAgent(requests: 1, prices: store.settings.prices))))") {
-                            store.updateSettings { $0.webLevel = .deep }
-                            engine.start(question: record.question, mode: record.effectiveSource)
-                        }
-                        .buttonStyle(.bordered)
+                        let estimate = CostModel.perplexityAgent(requests: 1, prices: store.settings.prices)
+                        Button("Approfondir (\(CostModel.format(estimate)))") { engine.deepen() }
+                            .buttonStyle(.bordered)
                     }
                     Button("Question de suite") {
                         showingFollowUpField = true
