@@ -21,6 +21,16 @@ struct PriceTable: Codable, Sendable, Equatable {
     var perplexitySearchPer1000: Double
     /// Perplexity Agent API, coût moyen par requête.
     var perplexityAgentPerRequest: Double
+    /// TVA appliquée par le fournisseur, en pourcentage. Les tarifs publiés par Google et
+    /// Perplexity sont hors taxes ; la facture d'un particulier en France ne l'est pas.
+    /// Zéro pour un compte professionnel qui récupère la TVA.
+    var vatPercent: Double = 20
+    /// Conversion affichée pour les totaux, à corriger dans les réglages quand le change bouge.
+    /// Les deux API facturent en dollars : l'euro n'est ici qu'une commodité de lecture.
+    var usdToEur: Double = 0.92
+
+    /// Multiplicateur appliqué à chaque coût pour obtenir le montant réellement facturé.
+    var vatMultiplier: Double { 1 + max(0, vatPercent) / 100 }
 
     static let current = PriceTable(
         updatedOn: "2026-08-13",
@@ -58,6 +68,49 @@ struct PriceTable: Codable, Sendable, Equatable {
     func input(for model: String) -> Double { geminiInput[model] ?? 0.30 }
     func output(for model: String) -> Double { geminiOutput[model] ?? 2.50 }
     func audioInput(for model: String) -> Double { geminiAudioInput[model] ?? input(for: model) * 3 }
+
+    /// Décodage tolérant : une grille écrite par une version antérieure de l'app n'a pas les
+    /// champs ajoutés depuis. Sans cela, une simple mise à jour rendrait le fichier illisible,
+    /// et l'app repartirait de zéro — historique et registre compris.
+    init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        let base = PriceTable.current
+        updatedOn = try box.decodeIfPresent(String.self, forKey: .updatedOn) ?? base.updatedOn
+        geminiInput = try box.decodeIfPresent([String: Double].self, forKey: .geminiInput) ?? base.geminiInput
+        geminiOutput = try box.decodeIfPresent([String: Double].self, forKey: .geminiOutput) ?? base.geminiOutput
+        geminiAudioInput = try box.decodeIfPresent([String: Double].self, forKey: .geminiAudioInput)
+            ?? base.geminiAudioInput
+        embeddingPerMillion = try box.decodeIfPresent(Double.self, forKey: .embeddingPerMillion)
+            ?? base.embeddingPerMillion
+        perplexitySearchPer1000 = try box.decodeIfPresent(Double.self, forKey: .perplexitySearchPer1000)
+            ?? base.perplexitySearchPer1000
+        perplexityAgentPerRequest = try box.decodeIfPresent(Double.self, forKey: .perplexityAgentPerRequest)
+            ?? base.perplexityAgentPerRequest
+        vatPercent = try box.decodeIfPresent(Double.self, forKey: .vatPercent) ?? 20
+        usdToEur = try box.decodeIfPresent(Double.self, forKey: .usdToEur) ?? 0.92
+    }
+
+    init(
+        updatedOn: String,
+        geminiInput: [String: Double],
+        geminiOutput: [String: Double],
+        geminiAudioInput: [String: Double],
+        embeddingPerMillion: Double,
+        perplexitySearchPer1000: Double,
+        perplexityAgentPerRequest: Double,
+        vatPercent: Double = 20,
+        usdToEur: Double = 0.92
+    ) {
+        self.updatedOn = updatedOn
+        self.geminiInput = geminiInput
+        self.geminiOutput = geminiOutput
+        self.geminiAudioInput = geminiAudioInput
+        self.embeddingPerMillion = embeddingPerMillion
+        self.perplexitySearchPer1000 = perplexitySearchPer1000
+        self.perplexityAgentPerRequest = perplexityAgentPerRequest
+        self.vatPercent = vatPercent
+        self.usdToEur = usdToEur
+    }
 }
 
 /// Compteurs d'usage renvoyés par Gemini (`usageMetadata`).
@@ -79,49 +132,62 @@ enum CostModel {
     static func gemini(model: String, usage: TokenUsage, prices: PriceTable) -> Double {
         let input = Double(usage.inputTokens) * prices.input(for: model)
         let output = Double(usage.outputTokens) * prices.output(for: model)
-        return (input + output) / 1_000_000
+        return (input + output) / 1_000_000 * prices.vatMultiplier
     }
 
     /// Coût d'une transcription : l'audio est facturé à son propre tarif d'entrée.
     static func geminiAudio(model: String, usage: TokenUsage, prices: PriceTable) -> Double {
         let input = Double(usage.inputTokens) * prices.audioInput(for: model)
         let output = Double(usage.outputTokens) * prices.output(for: model)
-        return (input + output) / 1_000_000
+        return (input + output) / 1_000_000 * prices.vatMultiplier
     }
 
     /// Indexation d'un fichier : environ 4 caractères par token, au tarif d'embedding.
     static func indexing(bytes: Int64, prices: PriceTable) -> Double {
         let tokens = Double(bytes) / 4
-        return tokens * prices.embeddingPerMillion / 1_000_000
+        return tokens * prices.embeddingPerMillion / 1_000_000 * prices.vatMultiplier
     }
 
     static func perplexitySearch(requests: Int, prices: PriceTable) -> Double {
-        Double(requests) * prices.perplexitySearchPer1000 / 1000
+        Double(requests) * prices.perplexitySearchPer1000 / 1000 * prices.vatMultiplier
     }
 
     static func perplexityAgent(requests: Int, prices: PriceTable) -> Double {
-        Double(requests) * prices.perplexityAgentPerRequest
+        Double(requests) * prices.perplexityAgentPerRequest * prices.vatMultiplier
     }
 
     /// Estimation affichée AVANT de lancer, donc sans usage réel.
     /// Ordres de grandeur : analyse ≈ 0,0005 $, recherche fichiers ≈ 0,003 $, synthèse ≈ 0,002 $.
     static func estimate(source: SourceMode, level: WebLevel, prices: PriceTable) -> Double {
+        // Ces trois montants sont hors taxes, comme les tarifs publiés ; la TVA est appliquée
+        // à la fin, une seule fois — les appels Perplexity, eux, la portent déjà.
         var total = 0.0005
         if source == .files || source == .both || source == .auto { total += 0.005 }
+        if source == .web || source == .both || source == .auto { total += 0.002 }
+        total *= prices.vatMultiplier
         if source == .web || source == .both || source == .auto {
             total += level == .deep
                 ? perplexityAgent(requests: 1, prices: prices)
                 : perplexitySearch(requests: 1, prices: prices)
-            total += 0.002
         }
         return total
     }
 
     /// « 0,014 $ » ou « gratuit » — jamais « 0,00 $ », qui donnerait l'impression que rien n'est compté.
+    /// Le montant est celui réellement facturé, TVA comprise.
     static func format(_ usd: Double) -> String {
         guard usd > 0 else { return "gratuit" }
         let decimals = usd < 0.01 ? 4 : 2
         let text = String(format: "%.\(decimals)f", usd).replacingOccurrences(of: ".", with: ",")
         return "\(text) $"
+    }
+
+    /// Les deux API facturent en dollars, mais un budget mensuel se pense en euros.
+    /// Employé pour les totaux et le plafond, jamais pour le coût d'un appel isolé.
+    static func formatEUR(_ usd: Double, prices: PriceTable) -> String {
+        let euros = usd * max(0, prices.usdToEur)
+        guard euros > 0 else { return "0 €" }
+        let text = String(format: "%.2f", euros).replacingOccurrences(of: ".", with: ",")
+        return "\(text) €"
     }
 }

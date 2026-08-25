@@ -220,7 +220,8 @@ struct HomeView: View {
         }
         if store.capReached {
             return StatusPill(
-                text: "Plafond du mois atteint (\(CostModel.format(store.settings.monthlyCapUSD)))",
+                text: "Plafond du mois atteint "
+                    + "(\(CostModel.formatEUR(store.settings.monthlyCapUSD, prices: store.settings.prices)))",
                 destination: .settings
             )
         }

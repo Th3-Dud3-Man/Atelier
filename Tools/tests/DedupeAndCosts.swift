@@ -23,8 +23,11 @@ check("zéro se dit « gratuit »", CostModel.format(0) == "gratuit")
 check("un montant minuscule reste visible", CostModel.format(0.0005) == "0,0005 $")
 check("un montant courant garde deux décimales", CostModel.format(1.5) == "1,50 $")
 
-print("\nTarification :")
-let prices = PriceTable.current
+print("\nTarification hors taxes :")
+// Les tarifs publiés par Google et Perplexity sont hors taxes ; on vérifie d'abord le calcul
+// brut, TVA neutralisée, puis la TVA elle-même.
+var prices = PriceTable.current
+prices.vatPercent = 0
 check("Perplexity : 0,005 $ par appel, quel que soit le nombre de requêtes",
       abs(CostModel.perplexitySearch(requests: 1, prices: prices) - 0.005) < 1e-12)
 var usage = TokenUsage()
@@ -35,6 +38,37 @@ check("Gemini : entrée + sortie au tarif du modèle",
 usage.thoughtsTokenCount = 1_000_000
 check("les tokens de réflexion sont facturés au tarif de sortie",
       abs(CostModel.gemini(model: "gemini-3.1-flash-lite", usage: usage, prices: prices) - 3.25) < 1e-9)
+
+print("\nTVA et conversion :")
+var taxed = PriceTable.current
+check("la grille part sur 20 % de TVA", abs(taxed.vatPercent - 20) < 1e-12)
+check("un appel Perplexity est facturé TVA comprise",
+      abs(CostModel.perplexitySearch(requests: 1, prices: taxed) - 0.006) < 1e-12)
+check("un appel Gemini est facturé TVA comprise",
+      abs(CostModel.gemini(model: "gemini-3.1-flash-lite", usage: usage, prices: taxed) - 3.90) < 1e-9)
+check("l'indexation aussi",
+      abs(CostModel.indexing(bytes: 4_000_000, prices: taxed) - 0.18) < 1e-9)
+taxed.usdToEur = 0.50
+check("les totaux se lisent en euros",
+      CostModel.formatEUR(10, prices: taxed) == "5,00 €")
+
+print("\nUn fichier de réglages écrit par une version antérieure :")
+let older = Data(#"{"updatedOn":"2026-01-01","geminiInput":{},"geminiOutput":{},"geminiAudioInput":{},"embeddingPerMillion":0.15,"perplexitySearchPer1000":5.0,"perplexityAgentPerRequest":0.05}"#.utf8)
+if let restored = try? JSONDecoder().decode(PriceTable.self, from: older) {
+    check("la grille se lit encore, sans les champs ajoutés depuis", restored.updatedOn == "2026-01-01")
+    check("les champs manquants reprennent leur valeur par défaut",
+          abs(restored.vatPercent - 20) < 1e-12 && abs(restored.usdToEur - 0.92) < 1e-12)
+} else {
+    check("la grille se lit encore, sans les champs ajoutés depuis", false)
+    check("les champs manquants reprennent leur valeur par défaut", false)
+}
+let bareSettings = Data(#"{"mainModel":"gemini-3.1-flash-lite"}"#.utf8)
+if let restored = try? JSONDecoder().decode(AppSettings.self, from: bareSettings) {
+    check("les réglages se lisent même réduits à un seul champ",
+          restored.mainModel == "gemini-3.1-flash-lite" && restored.monthlyCapUSD == 25)
+} else {
+    check("les réglages se lisent même réduits à un seul champ", false)
+}
 
 print(ok ? "\nOK" : "\nÉCHEC")
 if !ok { exit(1) }

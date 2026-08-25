@@ -86,7 +86,8 @@ struct HistoryView: View {
         let total = store.monthTotal()
         let cap = store.settings.monthlyCapUSD
         return VStack(alignment: .leading, spacing: 4) {
-            Text("\(monthName()) : \(CostModel.format(total)) sur \(CostModel.format(cap))")
+            Text("\(monthName()) : \(CostModel.formatEUR(total, prices: store.settings.prices)) "
+                 + "sur \(CostModel.formatEUR(cap, prices: store.settings.prices))")
                 .font(.subheadline)
                 .foregroundStyle(.primary)
             if cap > 0 {

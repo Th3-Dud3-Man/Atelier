@@ -12,9 +12,10 @@ Application native, écrite en Swift et SwiftUI, sans aucune dépendance extéri
 - Un iPhone et un iPad sous **iOS 26 / iPadOS 26** minimum.
 - Une **clé API Gemini** (Google AI Studio, facturation activée) — indispensable.
 - Une **clé API Perplexity** avec des crédits — facultative, seulement pour la recherche Internet.
+- Un **abonnement iCloud** dont l'espace suffit à vos documents : l'app lit le dossier iCloud Drive que vous lui désignez, et fonctionne très bien avec « Optimiser le stockage » activé — elle télécharge à la demande ce dont elle a besoin.
 - Un compte Apple Developer, ou à défaut un compte Apple gratuit (voir §6).
 
-Budget de fonctionnement : quelques dollars par mois pour un usage quotidien. Le détail est au §7.
+Budget de fonctionnement : de l'ordre de 25 € par mois tout compris, iCloud inclus, pour un usage quotidien — et le plafond intégré vous garantit de ne pas le dépasser. Le détail est au §7. L'abonnement Apple Developer (99 € par an) est à part.
 
 ---
 
@@ -70,7 +71,7 @@ Google plafonne un corpus à **10 Go**, et comme l'empreinte réelle vaut enviro
 L'app est faite pour ce cas, et elle ne vous demande rien :
 
 - **Tout est catalogué**, quelle que soit la taille : chaque fichier est connu par son nom, son dossier et sa date. Le catalogue vit sur l'appareil, ne coûte rien et n'est jamais envoyé.
-- **Le corpus indexé est un plan de travail**, pas une copie de votre disque. Il tient dans un budget que vous réglez (2 Go par défaut), et l'app le remplit d'abord avec vos documents les plus récents.
+- **Le corpus indexé est un plan de travail**, pas une copie de votre disque. Il tient dans un budget que vous réglez (3 Go par défaut, le maximum qui tienne dans le quota Google), et l'app le remplit d'abord avec vos documents les plus récents.
 - **Le reste entre à la demande.** Quand une question porte sur un fichier catalogué, l'app l'envoie à ce moment-là, cherche dedans, et répond. S'il n'y a plus de place, le document indexé le plus ancien cède la sienne — il reviendra de la même façon le jour où vous en aurez besoin.
 
 Concrètement : vos 10 Go sont tous cherchables, et vous ne payez l'indexation que de ce qui sert vraiment. Une réindexation coûte quelques centimes, jamais plus.
@@ -113,7 +114,7 @@ L'historique occupe une barre latérale repliable, et en paysage large la synth�
 2. Si la même question a déjà reçu une réponse **il y a moins de sept jours**, le résultat est réutilisé directement, sans rien dépenser. Un bouton **Relancer** reste disponible.
 3. Si la question est **proche sans être identique**, une carte vous propose : **Réutiliser**, **Compléter** (ne relancer que ce qui manque, en gardant la moitié déjà obtenue), ou **Nouvelle recherche**. Seule l'analyse de la question a été payée à ce stade — environ un demi-millième de dollar ; la recherche elle-même, qui coûte dix fois plus, attend votre choix.
 4. Une question portant sur l'actualité n'est **jamais** réutilisée automatiquement.
-5. Chaque recherche affiche son coût. L'historique affiche le total du mois. Au **plafond** (5 $ par défaut, modifiable), les appels payants s'arrêtent : l'historique reste consultable et l'app vous le dit clairement.
+5. Chaque recherche affiche son coût. L'historique affiche le total du mois. Au **plafond** (25 $ par défaut, soit environ 23 € TTC, modifiable), les appels payants s'arrêtent : l'historique reste consultable et l'app vous le dit clairement.
 
 ---
 
@@ -139,7 +140,21 @@ Si votre inscription au programme développeur n'est pas encore active — l'ins
 | Une recherche Internet approfondie | de 0,01 à 0,05 $ |
 | Une transcription d'une minute | environ 0,0006 $ |
 
-Un usage quotidien nourri reste très en dessous des 20 $ par mois. **Il n'existe pas de version gratuite de cette app :** chercher dans vos fichiers passe par Gemini, comme chercher sur Internet passe par Perplexity. Ce qui est gratuit, c'est le catalogue — savoir quels fichiers vous avez, les retrouver par leur nom — et le stockage du corpus chez Google. Ce qui se paie, c'est l'indexation, une fois par fichier, et chaque question posée.
+Ces montants sont **hors taxes**, comme les tarifs publiés. L'app, elle, affiche tout **TVA comprise** (20 %, modifiable dans Diagnostics), et convertit les totaux en euros pour que le plafond corresponde à votre budget réel.
+
+### Votre budget de 30 € par mois
+
+| Poste | Où cela se paie | Ordre de grandeur |
+|---|---|---|
+| iCloud (le dossier que l'app surveille) | Apple, abonnement | 0,99 € à 2,99 € selon le forfait |
+| Gemini — indexation puis recherche dans vos fichiers | Google, à l'usage | quelques euros |
+| Perplexity — recherche Internet | Perplexity, crédits prépayés | 0,006 € par recherche standard |
+
+Le plafond de l'app est réglé à **25 $, soit environ 23 € TTC**, et il couvre Gemini et Perplexity ensemble. Avec l'abonnement iCloud, vous restez sous les 30 €, et l'app s'arrête d'elle-même avant de les dépasser. En pratique, 23 € par mois représentent plus de deux mille recherches : vous ne les atteindrez pas.
+
+L'abonnement Apple Developer à 99 € par an n'entre pas dans ce compte, et l'app ne le connaît pas.
+
+**Il n'existe pas de version gratuite de cette app :** chercher dans vos fichiers passe par Gemini, comme chercher sur Internet passe par Perplexity. Ce qui est gratuit, c'est le catalogue — savoir quels fichiers vous avez, les retrouver par leur nom — et le stockage du corpus chez Google. Ce qui se paie, c'est l'indexation, une fois par fichier, et chaque question posée.
 
 **Et la clé gratuite de Google ?** Elle existe, mais ne l'utilisez pas ici. Les conditions d'utilisation de l'API Gemini distinguent l'offre gratuite de l'offre facturée : sur la gratuite, Google se réserve le droit de lire vos documents, de les faire relire par des humains et de s'en servir pour améliorer ses produits ; le corpus y est en outre plafonné à 1 Go. Dès que la facturation est activée sur le projet, cela cesse — vos fichiers ne servent plus qu'à vous répondre. Pour des documents personnels, la clé facturée est le seul choix raisonnable. Les tarifs sont relevés le 13 août 2026 et modifiables dans **Réglages › Diagnostics** si Google ou Perplexity les changent.
 

@@ -45,7 +45,16 @@ Autres tarifs relevés (page « Last updated 2026-08-13 UTC ») :
 - **Stockage : gratuit. Embeddings de requête : gratuits.** ✅
 - Les passages retrouvés sont facturés comme des tokens de contexte ordinaires. ✅
 
-### 1.4 Offre gratuite et offre facturée : ce n'est pas seulement une question de quota
+### 1.4 TVA et monnaie
+
+Les deux API publient des tarifs **hors taxes** et facturent en **dollars**. Pour un particulier
+en France, Google et Perplexity ajoutent la TVA à 20 %. L'app applique donc un multiplicateur à
+chaque coût calculé (réglable dans Diagnostics, zéro pour un compte professionnel) et convertit
+les totaux en euros à un taux lui aussi réglable — aucune conversion n'est demandée à un service
+extérieur, ce serait une donnée qui sort de l'appareil pour rien. ⚠️ à confirmer sur la première
+facture réelle : le taux exact et l'assujettissement dépendent du pays et du statut du compte.
+
+### 1.5 Offre gratuite et offre facturée : ce n'est pas seulement une question de quota
 
 Les conditions d'utilisation de l'API Gemini (`ai.google.dev/gemini-api/terms`) séparent nettement
 les deux : sur l'offre **gratuite**, « Google uses the content you submit to the Services and any

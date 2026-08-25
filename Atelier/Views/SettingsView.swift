@@ -254,10 +254,12 @@ struct SettingsView: View {
     private var budgetSection: some View {
         Section {
             LabeledContent("Ce mois-ci") {
-                Text(CostModel.format(store.monthTotal()))
+                Text(CostModel.formatEUR(store.monthTotal(), prices: store.settings.prices))
+                    + Text(" · \(CostModel.format(store.monthTotal()))")
+                    .foregroundStyle(.secondary)
             }
             Stepper(
-                "Plafond : \(CostModel.format(store.settings.monthlyCapUSD))",
+                "Plafond : \(CostModel.formatEUR(store.settings.monthlyCapUSD, prices: store.settings.prices))",
                 value: Binding(
                     get: { store.settings.monthlyCapUSD },
                     set: { value in store.updateSettings { $0.monthlyCapUSD = value } }
@@ -274,7 +276,12 @@ struct SettingsView: View {
             Text("Budget")
         } footer: {
             Text("Au plafond, plus aucun appel payant n'est lancé : l'historique reste consultable "
-                 + "et les résultats déjà obtenus restent relisibles. Un plafond à 0 $ désactive la limite.")
+                 + "et les résultats déjà obtenus restent relisibles. Un plafond à zéro désactive "
+                 + "la limite.\n\n"
+                 + "Les montants affichés sont TVA comprise. Google et Perplexity facturent en "
+                 + "dollars : l'euro n'est ici qu'une commodité de lecture, au taux réglable dans "
+                 + "Diagnostics. Votre abonnement iCloud, lui, se paie chez Apple et n'entre pas "
+                 + "dans ce compteur.")
         }
     }
 
@@ -389,6 +396,24 @@ struct SettingsView: View {
                 Text("relevée le \(store.settings.prices.updatedOn)")
                     .foregroundStyle(.secondary)
             }
+            Stepper(
+                "TVA appliquée : \(Int(store.settings.prices.vatPercent)) %",
+                value: Binding(
+                    get: { store.settings.prices.vatPercent },
+                    set: { value in store.updateSettings { $0.prices.vatPercent = value } }
+                ),
+                in: 0...30,
+                step: 1
+            )
+            Stepper(
+                "1 $ = \(euroRateText) €",
+                value: Binding(
+                    get: { store.settings.prices.usdToEur },
+                    set: { value in store.updateSettings { $0.prices.usdToEur = value } }
+                ),
+                in: 0.5...1.5,
+                step: 0.01
+            )
             if let error = store.lastPersistenceError {
                 Text("Enregistrement : \(error)").font(.footnote).foregroundStyle(.red)
             }
@@ -396,6 +421,10 @@ struct SettingsView: View {
                 Text("Synchronisation : \(error)").font(.footnote).foregroundStyle(.red)
             }
         }
+    }
+
+    private var euroRateText: String {
+        String(format: "%.2f", store.settings.prices.usdToEur).replacingOccurrences(of: ".", with: ",")
     }
 
     private var aboutSection: some View {

@@ -11,15 +11,16 @@ struct AppSettings: Codable, Sendable {
     var storeName: String = ""
     var webLevel: WebLevel = .standard
     var priority: SourcePriority = .filesFirst
-    /// Plafond volontairement bas au départ : mieux vaut le relever en connaissance de cause
-    /// que découvrir une facture. Zéro désactive la limite.
-    var monthlyCapUSD: Double = 5
+    /// Plafond mensuel, TVA comprise, en dollars — la monnaie des deux API. Il couvre Gemini
+    /// et Perplexity ensemble ; l'abonnement iCloud, lui, se règle chez Apple et n'entre pas
+    /// dans ce compteur. Zéro désactive la limite.
+    var monthlyCapUSD: Double = 25
     /// Budget du corpus indexé, en octets **bruts**. Google plafonne un store à 10 Go au palier 1,
     /// et l'empreinte réelle vaut environ trois fois la taille des données brutes : trois giga-octets
     /// de documents remplissent donc déjà ce quota. Au-delà du budget, les fichiers restent au
     /// catalogue — cherchables par leur nom, gratuits — et entrent dans le corpus à la demande,
     /// en prenant la place des plus anciennement indexés.
-    var corpusBudgetBytes: Int64 = 2 * 1024 * 1024 * 1024
+    var corpusBudgetBytes: Int64 = 3 * 1024 * 1024 * 1024
     /// Mois déjà signalé à 80 % du plafond, pour ne prévenir qu'une fois.
     var alerted80Month: String = ""
     var dictationHintShown: Bool = false
@@ -28,6 +29,30 @@ struct AppSettings: Codable, Sendable {
     /// Niveau 3 du Smart Search : indexer et relancer sans rien demander.
     var autoIndexSuggested: Bool = true
     var prices: PriceTable = .current
+
+    init() {}
+
+    /// Même précaution que pour la grille de prix : un réglage ajouté par une version ultérieure
+    /// ne doit pas rendre illisible le fichier écrit par la précédente.
+    init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        let base = AppSettings()
+        mainModel = try box.decodeIfPresent(String.self, forKey: .mainModel) ?? base.mainModel
+        lightModel = try box.decodeIfPresent(String.self, forKey: .lightModel) ?? base.lightModel
+        storeName = try box.decodeIfPresent(String.self, forKey: .storeName) ?? base.storeName
+        webLevel = try box.decodeIfPresent(WebLevel.self, forKey: .webLevel) ?? base.webLevel
+        priority = try box.decodeIfPresent(SourcePriority.self, forKey: .priority) ?? base.priority
+        monthlyCapUSD = try box.decodeIfPresent(Double.self, forKey: .monthlyCapUSD) ?? base.monthlyCapUSD
+        corpusBudgetBytes = try box.decodeIfPresent(Int64.self, forKey: .corpusBudgetBytes)
+            ?? base.corpusBudgetBytes
+        alerted80Month = try box.decodeIfPresent(String.self, forKey: .alerted80Month) ?? base.alerted80Month
+        dictationHintShown = try box.decodeIfPresent(Bool.self, forKey: .dictationHintShown)
+            ?? base.dictationHintShown
+        autoScan = try box.decodeIfPresent(Bool.self, forKey: .autoScan) ?? base.autoScan
+        autoIndexSuggested = try box.decodeIfPresent(Bool.self, forKey: .autoIndexSuggested)
+            ?? base.autoIndexSuggested
+        prices = try box.decodeIfPresent(PriceTable.self, forKey: .prices) ?? base.prices
+    }
 }
 
 /// Racine du fichier JSON unique.
