@@ -234,6 +234,12 @@ aucun secret, le rendre public rend tout illimité.
 
 # Si quelque chose bloque
 
+**Une étape reste bloquée sans rien afficher** — Elle attend une réponse au clavier que
+personne ne donnera. Chaque étape ferme désormais son entrée standard et s'arrête d'office
+au bout de quelques minutes, mais si cela se reproduit : annulez le flux (bouton `…` en
+haut à droite → **Cancel workflow**), et envoyez-moi le nom de l'étape et la dernière ligne
+affichée. Les lignes commençant par `→` disent exactement où elle en était.
+
 **« Les secrets de signature manquent »** — L'étape 4 n'a pas été faite, ou elle a échoué.
 Ouvrez son exécution : le message d'Apple y est repris tel quel.
 

@@ -19,7 +19,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Choisir la version d'Xcode la plus récente
+        timeout-minutes: 5
         run: |
+          exec < /dev/null
           ls -d /Applications/Xcode*.app
           sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
           xcodebuild -version
@@ -27,7 +29,9 @@ jobs:
           xcodebuild -showsdks | grep -i "iphoneos" || true
 
       - name: Compiler
+        timeout-minutes: 25
         run: |
+          exec < /dev/null
           set -o pipefail
           xcodebuild build \
             -project Atelier.xcodeproj \

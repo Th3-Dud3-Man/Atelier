@@ -31,7 +31,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Choisir la version d'Xcode la plus récente
+        timeout-minutes: 5
         run: |
+          exec < /dev/null
           sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
           xcodebuild -version
 
@@ -39,16 +41,26 @@ jobs:
       # certificat créés par le flux « Préparer la signature ». Elle est montée dans un
       # trousseau temporaire, propre à cette exécution, effacé à la fin.
       - name: Installer le certificat et le profil de distribution
+        # Cinq minutes suffisent très largement : au-delà, c'est qu'une commande attend
+        # une réponse que personne ne donnera jamais sur une machine sans clavier.
+        timeout-minutes: 5
         env:
           SIGNING_KEY_PEM: ${{ secrets.SIGNING_KEY_PEM }}
           SIGNING_CERT_PEM: ${{ secrets.SIGNING_CERT_PEM }}
           PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
         run: |
+          # L'entrée standard est fermée d'emblée. Si une commande se met malgré tout à
+          # réclamer un mot de passe, elle reçoit une fin de fichier et échoue tout de
+          # suite, au lieu d'attendre indéfiniment.
+          exec < /dev/null
           set -euo pipefail
           umask 077
-          if [ -z "${SIGNING_KEY_PEM:-}" ] || [ -z "${SIGNING_CERT_PEM:-}" ]; then
-            echo "::error::Les secrets de signature manquent. Lancez d'abord le flux "\
-                 "« Préparer la signature » : il les crée et les dépose lui-même."
+
+          etape() { echo "→ $1"; }
+
+          if [ -z "${SIGNING_KEY_PEM:-}" ] || [ -z "${SIGNING_CERT_PEM:-}" ] \
+             || [ -z "${PROVISIONING_PROFILE_BASE64:-}" ]; then
+            echo "::error::Les secrets de signature manquent. Lancez d'abord le flux « Préparer la signature » : il les crée et les dépose lui-même."
             exit 1
           fi
 
@@ -57,24 +69,32 @@ jobs:
           P12_PATH="$RUNNER_TEMP/identite.p12"
           PROFILE_PATH="$RUNNER_TEMP/profil.mobileprovision"
           KEYCHAIN_PATH="$RUNNER_TEMP/signature.keychain-db"
-          # Ni le mot de passe du .p12 ni celui du trousseau n'ont à survivre à l'exécution :
-          # ils sont tirés au sort ici et oubliés avec la machine.
-          P12_PASSWORD="$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)"
-          KEYCHAIN_PASSWORD="$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)"
 
+          # Tirés au sort ici, oubliés avec la machine : ni l'un ni l'autre n'est un secret
+          # du dépôt. `openssl rand` plutôt qu'un tube depuis /dev/urandom, qui peut rester
+          # suspendu sur certaines machines.
+          etape "mots de passe éphémères"
+          P12_PASSWORD="$(openssl rand -hex 24)"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+
+          etape "écriture de la clé, du certificat et du profil"
           printf '%s' "$SIGNING_KEY_PEM" > "$KEY_PATH"
           printf '%s' "$SIGNING_CERT_PEM" > "$CERT_PATH"
-          printf '%s' "$PROVISIONING_PROFILE_BASE64" | base64 --decode -o "$PROFILE_PATH"
+          printf '%s' "$PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          grep -q "PRIVATE KEY" "$KEY_PATH" || { echo "::error::SIGNING_KEY_PEM n'est pas une clé privée."; exit 1; }
+          grep -q "BEGIN CERTIFICATE" "$CERT_PATH" || { echo "::error::SIGNING_CERT_PEM n'est pas un certificat."; exit 1; }
+          [ -s "$PROFILE_PATH" ] || { echo "::error::Le profil est vide."; exit 1; }
 
-          # Le .p12 est assemblé par l'openssl livré avec macOS — /usr/bin/openssl, qui est
-          # LibreSSL. C'est délibéré : un OpenSSL 3 installé par Homebrew produirait une
-          # enveloppe chiffrée autrement, que « security import » peut refuser.
+          # /usr/bin/openssl est celui livré avec macOS. C'est délibéré : un OpenSSL 3
+          # installé par Homebrew produirait une enveloppe que « security import » refuse.
+          etape "assemblage de l'identité de signature"
           OPENSSL=/usr/bin/openssl
           [ -x "$OPENSSL" ] || OPENSSL=openssl
           "$OPENSSL" pkcs12 -export \
-            -inkey "$KEY_PATH" -in "$CERT_PATH" \
-            -name "L'Atelier" -passout "pass:$P12_PASSWORD" -out "$P12_PATH"
+            -inkey "$KEY_PATH" -in "$CERT_PATH" -name "L'Atelier" \
+            -passin "pass:" -passout "pass:$P12_PASSWORD" -out "$P12_PATH"
 
+          etape "trousseau temporaire"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -83,16 +103,23 @@ jobs:
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           rm -f "$KEY_PATH" "$CERT_PATH" "$P12_PATH"
 
+          etape "identités disponibles"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
           # Xcode cherche les profils à cet endroit précis, sous leur UUID.
+          etape "installation du profil"
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          UUID=$(security cms -D -i "$PROFILE_PATH" | plutil -extract UUID raw -)
-          NAME=$(security cms -D -i "$PROFILE_PATH" | plutil -extract Name raw -)
+          PROFILE_PLIST="$(security cms -D -i "$PROFILE_PATH")"
+          UUID=$(printf '%s' "$PROFILE_PLIST" | plutil -extract UUID raw -)
+          NAME=$(printf '%s' "$PROFILE_PLIST" | plutil -extract Name raw -)
           cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
           echo "PROFILE_NAME=$NAME" >> "$GITHUB_ENV"
           echo "Profil installé : $NAME"
 
       - name: Écrire les options d'export
+        timeout-minutes: 5
         run: |
+          exec < /dev/null
           set -euo pipefail
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
@@ -113,7 +140,9 @@ jobs:
           cat "$RUNNER_TEMP/ExportOptions.plist"
 
       - name: Archiver
+        timeout-minutes: 40
         run: |
+          exec < /dev/null
           set -euo pipefail
           set -o pipefail
           xcodebuild archive \
@@ -130,7 +159,9 @@ jobs:
             | tee archive.log
 
       - name: Exporter l'ipa
+        timeout-minutes: 15
         run: |
+          exec < /dev/null
           set -euo pipefail
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/Atelier.xcarchive" \
@@ -139,11 +170,13 @@ jobs:
           ls -lh "$RUNNER_TEMP/export"
 
       - name: Envoyer à TestFlight
+        timeout-minutes: 30
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
         run: |
+          exec < /dev/null
           set -euo pipefail
           mkdir -p "$HOME/.appstoreconnect/private_keys"
           printf '%s' "$ASC_PRIVATE_KEY" > "$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
@@ -153,7 +186,9 @@ jobs:
 
       - name: Rassembler les erreurs
         if: failure()
+        timeout-minutes: 5
         run: |
+          exec < /dev/null
           echo '## Ce que le compilateur a dit' >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           grep -E "(error|warning):" archive.log | sort -u | head -200 >> "$GITHUB_STEP_SUMMARY" \
@@ -172,6 +207,8 @@ jobs:
 
       - name: Effacer le trousseau temporaire
         if: always()
+        timeout-minutes: 5
         run: |
+          exec < /dev/null
           security delete-keychain "$RUNNER_TEMP/signature.keychain-db" || true
           rm -f "$HOME/.appstoreconnect/private_keys/"*.p8 || true
