@@ -58,7 +58,7 @@ final class AppStore {
     // ── Lecture ──────────────────────────────────────────────────────
 
     private static func load(from url: URL) -> AppData {
-        guard FileManager.default.fileExists(atPath: url.path) else { return AppData() }
+        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return AppData() }
         do {
             let raw = try Data(contentsOf: url)
             return try decoder().decode(AppData.self, from: raw)

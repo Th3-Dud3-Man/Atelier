@@ -460,7 +460,7 @@ final class FolderSync: FileIndexing {
             throw CocoaError(.fileReadUnknown)
         }
 
-        let basePath = root.standardizedFileURL.path
+        let basePath = root.standardizedFileURL.path(percentEncoded: false)
         var files: [ScannedFile] = []
 
         for case let item as URL in enumerator {
@@ -469,7 +469,7 @@ final class FolderSync: FileIndexing {
             if values.isDirectory == true || values.isPackage == true { continue }
             guard values.isRegularFile == true else { continue }
 
-            var relative = item.standardizedFileURL.path
+            var relative = item.standardizedFileURL.path(percentEncoded: false)
             if relative.hasPrefix(basePath) {
                 relative = String(relative.dropFirst(basePath.count))
             }
