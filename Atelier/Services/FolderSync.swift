@@ -377,6 +377,22 @@ final class FolderSync: FileIndexing {
 
     // ── Lecture disque, hors du fil principal ────────────────────────
 
+    /// Exécute un travail bloquant hors du fil principal, en transmettant l'annulation.
+    ///
+    /// `Task.detached` est indispensable ici (voir `readFolder`), mais il n'hérite pas de
+    /// l'annulation : `withTaskCancellationHandler` la relaie explicitement, sans quoi le bouton
+    /// « Arrêter » n'arrêterait rien.
+    private nonisolated static func offMainActor<T: Sendable>(
+        _ work: @escaping @Sendable () throws -> T
+    ) async throws -> T {
+        let task = Task.detached(priority: .utility) { try work() }
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
     private struct ScannedFile: Sendable {
         var relativePath: String
         var name: String
@@ -393,14 +409,29 @@ final class FolderSync: FileIndexing {
     /// Énumère un dossier. Le scope est ouvert une seule fois sur le dossier parent :
     /// il couvre récursivement tout le contenu, y compris les fichiers ajoutés depuis.
     ///
-    /// Fonction `nonisolated async` : appelée depuis le fil principal, elle s'exécute quand même
-    /// hors de lui. Pas de `Task.detached`, qui n'hériterait pas de l'annulation et rendrait le
-    /// bouton « Arrêter » inopérant.
+    /// Attention au piège : avec `SWIFT_APPROACHABLE_CONCURRENCY`, une fonction `nonisolated async`
+    /// s'exécute **sur l'acteur appelant**, donc ici sur le fil principal. Une énumération de
+    /// milliers de fichiers le figerait. D'où la tâche détachée — et comme une tâche détachée
+    /// n'hérite pas de l'annulation, celle-ci lui est transmise à la main.
     private nonisolated static func readFolder(
         bookmark: Data,
         excludedSubpaths: [String],
         excludedExtensions: [String]
     ) async throws -> ScanOutcome {
+        try await offMainActor {
+            try scanFolderSynchronously(
+                bookmark: bookmark,
+                excludedSubpaths: excludedSubpaths,
+                excludedExtensions: excludedExtensions
+            )
+        }
+    }
+
+    private nonisolated static func scanFolderSynchronously(
+        bookmark: Data,
+        excludedSubpaths: [String],
+        excludedExtensions: [String]
+    ) throws -> ScanOutcome {
         var isStale = false
         let root = try URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &isStale)
 
@@ -464,7 +495,14 @@ final class FolderSync: FileIndexing {
 
     /// Lit un fichier. La lecture coordonnée est ce qui **attend** le téléchargement d'un fichier
     /// allégé par iCloud : la documentation le dit explicitement, et cela évite `NSMetadataQuery`.
+    /// Cette attente peut durer : elle ne doit surtout pas avoir lieu sur le fil principal.
     private nonisolated static func readFile(bookmark: Data, relativePath: String) async throws -> Data {
+        try await offMainActor {
+            try readFileSynchronously(bookmark: bookmark, relativePath: relativePath)
+        }
+    }
+
+    private nonisolated static func readFileSynchronously(bookmark: Data, relativePath: String) throws -> Data {
         var isStale = false
         let root = try URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &isStale)
         let accessed = root.startAccessingSecurityScopedResource()

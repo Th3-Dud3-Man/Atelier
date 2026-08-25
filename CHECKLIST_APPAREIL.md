@@ -209,3 +209,25 @@ Tools/test-apis.sh
 - Le micro et l'autorisation d'enregistrement.
 - La qualité des résultats sur **votre** corpus : c'est vous seul qui savez si le bon passage a été retrouvé.
 - La concordance entre les coûts affichés et vos factures réelles.
+
+---
+
+## Note technique : les réglages de concurrence du projet
+
+Le projet est en **Swift 6.0** avec la concurrence stricte, mais **sans**
+`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` ni `SWIFT_APPROACHABLE_CONCURRENCY`, que les gabarits
+Xcode 26 activent par défaut.
+
+C'est délibéré. La chaîne Swift dont je dispose ici (6.1.2 sous Linux) ne connaît pas ces réglages :
+je ne peux donc pas vérifier le code avec eux. Le projet livré correspond exactement à la sémantique
+que le compilateur a validée. Chaque type isolé porte de toute façon son `@MainActor` explicite,
+donc rien ne dépend d'une valeur par défaut.
+
+Ce choix a une conséquence concrète, qui a d'ailleurs failli passer inaperçue : sous
+`SWIFT_APPROACHABLE_CONCURRENCY`, une fonction `nonisolated async` s'exécute **sur l'acteur
+appelant** au lieu de basculer hors de lui. Le parcours des dossiers, qui est bloquant, se serait
+alors déroulé sur le fil principal et aurait figé l'interface. Le code utilise désormais une tâche
+détachée avec relais d'annulation, ce qui est correct dans les deux configurations.
+
+Si vous voulez activer ces réglages plus tard, dites-le-moi : c'est faisable, mais cela demande une
+relecture des isolations, pas une simple case à cocher.
