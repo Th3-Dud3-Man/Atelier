@@ -7,6 +7,7 @@ struct HomeView: View {
     @Environment(SearchEngine.self) private var engine
     @Environment(FolderSync.self) private var sync
     @Environment(Router.self) private var router
+    @Environment(NetworkMonitor.self) private var network
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     @State private var question = ""
@@ -153,7 +154,7 @@ struct HomeView: View {
                     .frame(maxWidth: .infinity, minHeight: 52)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(trimmed.isEmpty)
+            .disabled(trimmed.isEmpty || !network.isOnline)
             .keyboardShortcut(.return, modifiers: .command)
         }
     }
@@ -183,6 +184,11 @@ struct HomeView: View {
     // ── Pastille d'état : une seule à la fois ────────────────────────
 
     private var statusMessage: String? {
+        if !network.isOnline {
+            return store.indexedFiles.isEmpty
+                ? "Hors ligne — la recherche reprendra au retour du réseau"
+                : "Hors ligne — la recherche a besoin du réseau, l'historique reste consultable"
+        }
         if let progress = sync.progressText { return progress }
         if store.capReached {
             return "Plafond du mois atteint (\(CostModel.format(store.settings.monthlyCapUSD)))"
@@ -202,7 +208,12 @@ struct HomeView: View {
     // ── Actions ──────────────────────────────────────────────────────
 
     private func launch() {
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, network.isOnline else { return }
+        // Clé absente : plutôt qu'un message d'erreur, on ouvre directement la saisie.
+        guard Keychain.has(.gemini) else {
+            router.showingSettings = true
+            return
+        }
         engine.start(question: trimmed, mode: mode)
         router.showResults()
         fieldFocused = false

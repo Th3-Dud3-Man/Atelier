@@ -40,25 +40,35 @@ private struct PDFPreview: UIViewRepresentable {
     let url: URL
     let page: Int?
 
+    /// Le saut à la page citée n'a lieu qu'une fois : sinon chaque rafraîchissement de la vue
+    /// ramènerait le lecteur à cette page et il deviendrait impossible de faire défiler.
+    final class Coordinator {
+        var didJump = false
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeUIView(context: Context) -> PDFView {
         let view = PDFView()
         view.autoScales = true
         view.displayMode = .singlePageContinuous
         view.displayDirection = .vertical
+        // Le fichier a été recopié dans le conteneur de l'app par FolderSync : il est lisible
+        // directement, sans portée de sécurité à tenir ouverte pendant l'aperçu.
+        view.document = PDFDocument(url: url)
         return view
     }
 
     func updateUIView(_ view: PDFView, context: Context) {
-        // Le document vit dans un dossier à portée de sécurité : l'accès est ouvert par
-        // FolderSync avant l'affichage et refermé quand la vue disparaît.
-        if view.document == nil {
-            view.document = PDFDocument(url: url)
-        }
-        if let page, let document = view.document,
-           page >= 1, page <= document.pageCount,
-           let target = document.page(at: page - 1) {
-            view.go(to: target)
-        }
+        guard !context.coordinator.didJump,
+              let page,
+              let document = view.document,
+              page >= 1, page <= document.pageCount,
+              // page(at:) lève une exception hors bornes : l'index est vérifié avant.
+              let target = document.page(at: page - 1)
+        else { return }
+        context.coordinator.didJump = true
+        view.go(to: target)
     }
 }
 

@@ -107,6 +107,19 @@ struct ResultsView: View {
                     duplicateCard(prompt)
                 }
 
+                if let clarification = engine.clarification {
+                    NoticeCard(
+                        title: "Une précision serait utile",
+                        message: clarification,
+                        actionTitle: "Reformuler",
+                        action: {
+                            engine.cancel()
+                            router.backToHome()
+                            router.requestFocus()
+                        }
+                    )
+                }
+
                 if let error = engine.errorText {
                     NoticeCard(
                         title: "Un appel a échoué",

@@ -43,6 +43,9 @@ final class SearchEngine {
     private(set) var phase: Phase = .idle
     private(set) var statusText: String = ""
     private(set) var errorText: String?
+    /// Question de clarification quand la demande est réellement inintelligible.
+    /// Ce n'est pas une erreur : elle s'affiche comme une question, pas comme un échec.
+    private(set) var clarification: String?
     private(set) var duplicatePrompt: DuplicatePrompt?
     /// Vrai pendant que la synthèse s'écrit, pour afficher le curseur.
     private(set) var isStreaming = false
@@ -88,6 +91,7 @@ final class SearchEngine {
 
         cancel()
         errorText = nil
+        clarification = nil
         duplicatePrompt = nil
         pendingFollowUp = nil
         pendingRun = nil
@@ -153,10 +157,12 @@ final class SearchEngine {
                 record = current
             }
 
+            // Question inintelligible : on demande une précision plutôt que de dépenser
+            // en recherches. L'analyse, elle, a déjà été payée — c'est inévitable.
             if analysis.needsClarification, let question = analysis.clarificationQuestion, !question.isEmpty {
-                phase = .failed
+                phase = .done
                 statusText = ""
-                errorText = question
+                clarification = question
                 finish(status: .partial)
                 return
             }

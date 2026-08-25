@@ -7,6 +7,7 @@ struct AtelierApp: App {
     @State private var store: AppStore
     @State private var sync: FolderSync
     @State private var engine: SearchEngine
+    @State private var network = NetworkMonitor()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -23,6 +24,7 @@ struct AtelierApp: App {
                 .environment(store)
                 .environment(sync)
                 .environment(engine)
+                .environment(network)
                 .tint(.atelierAccent)
         }
         .onChange(of: scenePhase) { _, phase in

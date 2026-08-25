@@ -10,7 +10,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 SWIFTC="${SWIFTC:-swiftc}"
 
-SKIP='^import (SwiftUI|UIKit|QuickLook|PDFKit|AVFoundation|Security|CryptoKit|Speech|Observation)'
+SKIP='^import (SwiftUI|UIKit|QuickLook|PDFKit|AVFoundation|Security|CryptoKit|Speech|Network|Observation)'
 # Fichiers qui n'importent que Foundation mais s'appuient sur des API absentes hors Apple :
 #   SSEStream  → URLSession.bytes(for:)
 #   FolderSync → portée de sécurité, signets, NSFileCoordinator
@@ -18,7 +18,7 @@ EXCLUDE_PATHS='Atelier/Services/SSEStream.swift
 Atelier/Services/FolderSync.swift'
 FILES=$(grep -RL --include='*.swift' -E "$SKIP" Atelier | sort)
 ONLY_OBSERVATION=$(grep -Rl --include='*.swift' '^import Observation' Atelier \
-    | xargs -r grep -L -E '^import (SwiftUI|UIKit|QuickLook|PDFKit|AVFoundation|Security|CryptoKit|Speech)' | sort)
+    | xargs -r grep -L -E '^import (SwiftUI|UIKit|QuickLook|PDFKit|AVFoundation|Security|CryptoKit|Speech|Network)' | sort)
 FILES=$(printf '%s\n%s\n' "$FILES" "$ONLY_OBSERVATION" | grep -v '^$' | sort -u | grep -vxF "$EXCLUDE_PATHS")
 
 TMP=$(mktemp -d)
