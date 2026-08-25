@@ -12,7 +12,7 @@
 5. **Un appel d'analyse** en JSON au début de chaque recherche : intention, source, requêtes web, jugement de doublon, fichiers catalogués à repêcher.
 6. **Smart Search v2** : dossiers iCloud désignés une fois par le sélecteur, gardés par *security-scoped bookmarks* ; re-scan incrémental à chaque lancement et à chaque retour au premier plan ; niveau 3 entièrement automatique (l'app lit, indexe et relance seule).
 7. **Persistance** : un fichier JSON dans Documents (historique, registre, réglages, coûts) ; clés API dans le Keychain.
-8. **Voix** : la dictée du clavier iOS d'abord (gratuite, locale) ; enregistrement long `AVAudioRecorder` transcrit par Gemini ensuite ; `SpeechAnalyzer` seulement s'il reste du temps.
+8. **Voix** : dictée en direct dans l'app (`SFSpeechRecognizer`, reconnaissance exigée sur l'appareil, gratuite) ; enregistrement long `AVAudioRecorder` transcrit par Gemini pour les mémos.
 9. **Anti-dépense et budget** : empreinte normalisée puis jugement Gemini ; coût par appel, compteur mensuel, plafond avec bascule en mode gratuit.
 10. **Livraison** : dépôt propre, `README.md` en français, `NOTES_API.md`, `CHECKLIST_APPAREIL.md`, et `Tools/test-apis.sh` à lancer avec vos clés.
 

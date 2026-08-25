@@ -13,7 +13,7 @@ struct HomeView: View {
     @State private var question = ""
     @State private var mode: SourceMode = .auto
     @State private var recorder = VoiceRecorder()
-    @State private var showingDictationHint = false
+    @State private var dictation = LiveDictation()
     @FocusState private var fieldFocused: Bool
 
     private var trimmed: String {
@@ -39,7 +39,7 @@ struct HomeView: View {
                 }
 
                 searchField
-                sourcePicker
+                contextRow
                 actions
 
                 if let status = statusMessage {
@@ -67,20 +67,29 @@ struct HomeView: View {
             .padding(.horizontal, margin)
         }
         .animation(.easeInOut(duration: 0.18), value: fieldFocused)
+        .animation(.easeInOut(duration: 0.18), value: dictation.isListening)
         .toolbar { toolbarContent }
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { fieldFocused = true }
+        // Volontairement pas de mise au point à l'ouverture : arriver sur un clavier déjà
+        // déplié est brutal, et masque la moitié de l'écran avant qu'on ait rien demandé.
+        // Le clavier vient quand on touche le champ, ou après « Nouvelle recherche ».
         .onChange(of: router.focusRequests) { _, _ in fieldFocused = true }
-        .alert("La dictée du clavier", isPresented: $showingDictationHint) {
-            Button("Compris") {
-                store.updateSettings { $0.dictationHintShown = true }
-                fieldFocused = true
-            }
+        // La dictée écrit dans le champ au fil de la parole : le texte reconnu remplace ce
+        // qui s'y trouvait, préfixe compris, sans toucher à ce que l'on tape à la main.
+        .onChange(of: dictation.text) { _, spoken in
+            guard dictation.isListening || !spoken.isEmpty else { return }
+            question = spoken
+        }
+        .alert(
+            "Dictée",
+            isPresented: Binding(
+                get: { dictation.errorText != nil },
+                set: { if !$0 { dictation.dismissError() } }
+            )
+        ) {
+            Button("Fermer") { dictation.dismissError() }
         } message: {
-            Text("Pour dicter une question, touchez le micro du clavier iOS, en bas à droite : "
-                 + "la reconnaissance est locale, gratuite et excellente en français.\n\n"
-                 + "Le bouton micro de l'app, lui, sert aux enregistrements longs : maintenez-le "
-                 + "pour enregistrer un mémo, qui sera transcrit puis relu avant de devenir une question.")
+            Text(dictation.errorText ?? "")
         }
         .sheet(isPresented: Binding(get: { recorder.isBusy },
                                     set: { if !$0 { recorder.cancel() } })) {
@@ -135,35 +144,70 @@ struct HomeView: View {
         )
     }
 
-    private var sourcePicker: some View {
-        Picker("Où chercher", selection: $mode) {
-            ForEach(SourceMode.allCases) { source in
-                Text(source.label).tag(source)
+    /// Une seule ligne sous le champ : elle dit que le micro écoute, ou bien où l'on cherche.
+    /// Deux informations qui ne servent jamais en même temps, et une hauteur qui ne bouge pas.
+    @ViewBuilder
+    private var contextRow: some View {
+        if dictation.isListening {
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(Color.atelierAccent)
+                    .frame(width: 7, height: 7)
+                Text("J'écoute — touchez le micro pour arrêter")
             }
+            .font(.footnote)
+            .foregroundStyle(Color.atelierAccent)
+            .transition(.opacity)
+        } else {
+            sourcePicker
         }
-        .pickerStyle(.segmented)
     }
+
+    /// Quatre cases toujours affichées pour un réglage qu'on change une fois sur dix : le
+    /// choix se fait désormais dans un menu, sur une seule ligne discrète. « Automatique »
+    /// reste la valeur de départ, et c'est tout l'intérêt de l'app.
+    private var sourcePicker: some View {
+        Menu {
+            Picker("Où chercher", selection: $mode) {
+                ForEach(SourceMode.allCases) { source in
+                    Text(source.label).tag(source)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(mode.label)
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+        .accessibilityLabel("Où chercher : \(mode.label)")
+    }
+
+    /// Vrai dès que le micro travaille, d'une façon ou d'une autre.
+    private var micActive: Bool { dictation.isListening || recorder.isRecording }
 
     private var actions: some View {
         HStack(spacing: 12) {
             // Volontairement pas un Button : un Button plus un appui long déclencherait les deux,
             // et l'enregistrement s'arrêterait au relâchement du doigt. Les deux gestes posés
             // séparément s'excluent proprement — l'appui long l'emporte s'il est tenu.
-            Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
+            Image(systemName: micActive ? "stop.fill" : "mic.fill")
                 .font(.system(size: 20, weight: .medium))
                 .frame(width: 52, height: 52)
                 .background(
                     Circle()
-                        .fill(recorder.isRecording ? Color.atelierAccent : Color(.secondarySystemGroupedBackground))
+                        .fill(micActive ? Color.atelierAccent : Color(.secondarySystemGroupedBackground))
                 )
-                .overlay(Circle().stroke(Color(.separator), lineWidth: recorder.isRecording ? 0 : 1))
-                .foregroundStyle(recorder.isRecording ? Color.white : Color.atelierAccent)
+                .overlay(Circle().stroke(Color(.separator), lineWidth: micActive ? 0 : 1))
+                .foregroundStyle(micActive ? Color.white : Color.atelierAccent)
                 .contentShape(Circle())
                 .onTapGesture { micTapped() }
                 .onLongPressGesture(minimumDuration: 0.4) { startRecording() }
                 .accessibilityElement()
-                .accessibilityLabel(recorder.isRecording ? "Arrêter l'enregistrement" : "Dicter ou enregistrer")
-                .accessibilityHint("Touchez pour dicter, maintenez pour enregistrer un mémo")
+                .accessibilityLabel(micActive ? "Arrêter" : "Dicter")
+                .accessibilityHint("Touchez pour dicter, maintenez pour enregistrer un mémo long")
                 .accessibilityAddTraits(.isButton)
 
             Button(action: launch) {
@@ -240,6 +284,9 @@ struct HomeView: View {
     // ── Actions ──────────────────────────────────────────────────────
 
     private func launch() {
+        // Lancer une recherche pendant que le micro tourne laisserait la dictée écrire
+        // par-dessus la question déjà partie.
+        dictation.stop()
         guard !trimmed.isEmpty, network.isOnline else { return }
         // Clé absente : plutôt qu'un message d'erreur, on ouvre directement la saisie.
         guard Keychain.has(.gemini) else {
@@ -255,15 +302,19 @@ struct HomeView: View {
     private func micTapped() {
         if recorder.isRecording {
             finishRecording()
-        } else if !store.settings.dictationHintShown {
-            showingDictationHint = true
+        } else if dictation.isListening {
+            dictation.stop()
         } else {
-            fieldFocused = true
+            // Le clavier gênerait : la dictée écrit toute seule dans le champ.
+            fieldFocused = false
+            dictation.start(startingFrom: trimmed)
         }
     }
 
     private func startRecording() {
         guard !recorder.isRecording else { return }
+        dictation.stop()
+        fieldFocused = false
         Task { await recorder.start() }
     }
 

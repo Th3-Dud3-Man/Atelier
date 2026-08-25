@@ -192,7 +192,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "L'Atelier";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "L'Atelier utilise le micro pour enregistrer vos mémos vocaux et les transcrire en questions.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "L'Atelier utilise le micro pour dicter vos questions et enregistrer vos mémos vocaux.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "La dictée est reconnue sur l'appareil, sans que votre voix ne quitte l'iPhone.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -222,7 +223,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "L'Atelier";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "L'Atelier utilise le micro pour enregistrer vos mémos vocaux et les transcrire en questions.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "L'Atelier utilise le micro pour dicter vos questions et enregistrer vos mémos vocaux.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "La dictée est reconnue sur l'appareil, sans que votre voix ne quitte l'iPhone.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

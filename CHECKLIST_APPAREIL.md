@@ -159,29 +159,29 @@ Vérifiez aussi que **Relancer** relance vraiment (le coût affiché doit augmen
 
 ## Étape 7 — La voix
 
-27. Touchez brièvement le bouton micro.
+**La dictée en direct.** Sur l'accueil, touchez le **micro rond** (une touche brève, sans
+maintenir).
 
-**Attendu :** au premier usage, une explication indique que la dictée passe par le micro du clavier iOS. Ensuite, le champ reprend simplement le focus.
+**Attendu :** iOS demande une fois l'autorisation du micro et de la reconnaissance vocale.
+Le micro devient bleu, la ligne sous le champ affiche « J'écoute », et le texte s'écrit au
+fil de votre parole. Une seconde touche arrête. Le clavier ne s'ouvre pas.
 
-28. Utilisez le micro **du clavier** pour dicter une question, puis lancez la recherche.
+**Points à me rapporter :**
+- « La reconnaissance hors ligne n'est pas installée » → allez dans Réglages › Général ›
+  Clavier › Dictée et activez-la, puis réessayez. Si le message revient, dites-le-moi.
+- Le texte arrive mais sans aucune ponctuation → dites-le-moi.
+- Rien ne s'écrit alors que le micro est bleu → dites-le-moi, avec le modèle d'iPhone.
 
-**Attendu :** le texte s'écrit au fil de la parole, gratuitement et sans réseau.
+**Le mémo long.** Maintenez le micro une demi-seconde.
 
-29. **Maintenez** le doigt sur le bouton micro de l'app.
+**Attendu :** un panneau s'ouvre avec un chronomètre. Parlez trente secondes, touchez
+**Terminer** : « Transcription en cours… », puis un écran de relecture avec le texte.
 
-**Attendu :** iOS demande l'autorisation du micro (une seule fois) ; un panneau s'ouvre avec un chronomètre qui avance.
-
-30. Parlez une minute, puis touchez le bouton micro pour arrêter.
-
-**Attendu :** « Transcription en cours… », puis un écran affichant le texte, **modifiable**, avec un bouton **Rechercher à partir de ce texte**.
-
-**À me rapporter :** la qualité de la transcription sur votre diction, et le temps d'attente pour une minute d'enregistrement.
-
-31. Refaites-le avec un mémo de **dix minutes**.
-
-**Attendu :** cela fonctionne aussi — au-delà de douze méga-octets, l'app bascule automatiquement sur une autre voie d'envoi. Si cette étape échoue alors que la minute passait, c'est précisément cette bascule qui est en cause : dites-le-moi.
-
----
+**Points de vigilance :**
+- Une erreur mentionnant un format audio → copiez-la-moi telle quelle : c'est le point que
+  seule une vraie transcription peut trancher.
+- Au bout d'une heure, l'enregistrement s'arrête tout seul et le panneau doit rester
+  utilisable, avec « Limite d'une heure atteinte » et le bouton Terminer actif.
 
 ## Étape 8 — L'iPad
 

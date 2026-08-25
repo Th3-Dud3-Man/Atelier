@@ -92,7 +92,9 @@ Ouvrez l'app : le clavier est déjà là, le curseur dans le champ. Tapez, touch
 - **Internet** — Perplexity seulement.
 - **Les deux** — une synthèse unique qui distingue les deux types de sources.
 
-**Pour dicter**, utilisez le **micro du clavier iOS**, en bas à droite du clavier : la reconnaissance est locale, gratuite, et excellente en français. C'est le chemin recommandé pour une question.
+**Pour dicter**, touchez le **micro rond** sous le champ. Le texte s'écrit au fil de votre parole, directement dans la question. Touchez-le à nouveau pour arrêter. La reconnaissance se fait **sur l'appareil** : votre voix ne part nulle part, et cela ne coûte rien. Le clavier reste fermé pendant ce temps.
+
+**Pour un mémo long**, maintenez ce même micro. L'app enregistre jusqu'à une heure, puis Gemini transcrit — meilleur sur la ponctuation et les noms propres, pour quelques centièmes de centime la minute. Vous relisez avant que cela devienne une question.
 
 **Pour un mémo long**, maintenez le doigt sur le bouton micro rond de l'app. Un panneau s'ouvre avec un chronomètre. À la fin, l'enregistrement est transcrit par Gemini, et le texte s'affiche pour que vous le relisiez et le corrigiez **avant** qu'il devienne une question.
 
