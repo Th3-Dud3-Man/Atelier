@@ -163,7 +163,14 @@ final class SearchEngine {
                                message: "Aucune clé Gemini n'est enregistrée.")
             }
 
-            // 2. Analyse : un seul appel, qui décide aussi de la source et juge le doublon.
+            // 2. Plafond mensuel : la vérification vient AVANT l'analyse, qui est déjà un
+            // appel payant. La réutilisation ci-dessus, elle, reste possible : elle ne coûte rien.
+            if store.capReached {
+                stopAtCap()
+                return
+            }
+
+            // 3. Analyse : un seul appel, qui décide aussi de la source et juge le doublon.
             phase = .analyzing
             statusText = "Analyse de la question…"
             let analysis = try await analyze(question: question)
@@ -184,7 +191,7 @@ final class SearchEngine {
                 return
             }
 
-            // 3. Doublon jugé par le modèle : on demande avant de dépenser.
+            // 4. Doublon jugé par le modèle : on demande avant de dépenser.
             if let previous = duplicateCandidate(from: analysis), !analysis.isRecentInfo {
                 pendingRun = (question, mode, analysis)
                 duplicatePrompt = DuplicatePrompt(
@@ -283,13 +290,9 @@ final class SearchEngine {
             record = current
         }
 
-        // Plafond mensuel : au-delà, plus aucun appel payant.
+        // Le plafond a pu être franchi entre-temps, par exemple par une question de suite.
         if store.capReached {
-            phase = .failed
-            statusText = ""
-            errorText = "Plafond mensuel atteint (\(CostModel.format(store.settings.monthlyCapUSD))). "
-                + "L'historique reste consultable ; relevez le plafond dans les réglages pour continuer à chercher."
-            finish(status: .partial)
+            stopAtCap()
             return
         }
 
@@ -726,6 +729,16 @@ final class SearchEngine {
         current.status = status
         record = current
         store.upsert(current)
+    }
+
+    /// Mode gratuit : plus aucun appel payant, mais tout ce qui est déjà là reste consultable.
+    private func stopAtCap() {
+        phase = .failed
+        statusText = ""
+        errorText = "Plafond mensuel atteint (\(CostModel.format(store.settings.monthlyCapUSD))). "
+            + "L'historique et les résultats déjà obtenus restent consultables ; "
+            + "relevez le plafond dans les réglages pour chercher de nouveau."
+        finish(status: .partial)
     }
 
     private func fail(with error: Error) {
