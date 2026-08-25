@@ -20,7 +20,7 @@ struct ResultsView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let twoColumns = geometry.size.width >= Layout.twoColumnThreshold
+            let twoColumns = geometry.size.width >= Metrics.twoColumnThreshold
 
             ScrollViewReader { scroll in
                 ScrollView {
@@ -44,7 +44,7 @@ struct ResultsView: View {
                             followUpSection
                         }
                     }
-                    .padding(.horizontal, sizeClass == .regular ? Layout.marginWide : Layout.margin)
+                    .padding(.horizontal, sizeClass == .regular ? Metrics.marginWide : Metrics.margin)
                     .padding(.bottom, 40)
                     .frame(maxWidth: 1100, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -171,7 +171,7 @@ struct ResultsView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: Layout.corner))
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: Metrics.corner))
     }
 
     // ── Synthèse ─────────────────────────────────────────────────────

@@ -9,8 +9,6 @@ struct SourceCard: View {
 
     @State private var expanded = false
 
-    private var excerptLimit: Int { expanded ? .max : 320 }
-
     private var excerpt: String {
         let text = source.excerpt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !expanded, text.count > 320 else { return text }
@@ -73,11 +71,11 @@ struct SourceCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: Layout.corner)
+            RoundedRectangle(cornerRadius: Metrics.corner)
                 .fill(isHighlighted ? Color.atelierAccent.opacity(0.10) : Color(.secondarySystemGroupedBackground))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: Layout.corner)
+            RoundedRectangle(cornerRadius: Metrics.corner)
                 .stroke(isHighlighted ? Color.atelierAccent : Color(.separator), lineWidth: 1)
         )
         .animation(.easeInOut(duration: 0.2), value: isHighlighted)

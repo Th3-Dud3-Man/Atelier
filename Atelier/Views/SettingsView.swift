@@ -16,6 +16,13 @@ struct SettingsView: View {
     @State private var importing = false
     @State private var importReplaces = false
     @State private var confirmingClear = false
+    /// Encodé au moment du clic, et non à chaque rafraîchissement de la vue.
+    @State private var exportPayload = Data()
+
+    private var exportDateStamp: String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: .now)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
 
     var body: some View {
         NavigationStack {
@@ -41,10 +48,10 @@ struct SettingsView: View {
             }
             .fileExporter(
                 isPresented: $exporting,
-                document: JSONDocument(data: (try? store.exportData()) ?? Data()),
+                document: JSONDocument(data: exportPayload),
                 contentType: .json,
-                defaultFilename: "atelier-\(Date.now.formatted(.iso8601.year().month().day()))"
-            ) { _ in }
+                defaultFilename: "atelier-\(exportDateStamp)"
+            ) { _ in exportPayload = Data() }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
                 guard case .success(let url) = result else { return }
                 let accessed = url.startAccessingSecurityScopedResource()
@@ -243,7 +250,10 @@ struct SettingsView: View {
 
     private var dataSection: some View {
         Section("Données") {
-            Button("Exporter (JSON)") { exporting = true }
+            Button("Exporter (JSON)") {
+                exportPayload = (try? store.exportData()) ?? Data()
+                exporting = true
+            }
             Button("Importer et fusionner") {
                 importReplaces = false
                 importing = true

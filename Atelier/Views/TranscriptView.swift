@@ -24,7 +24,7 @@ struct TranscriptView: View {
                     .scrollContentBackground(.hidden)
                     .padding(10)
                     .background(Color(.secondarySystemGroupedBackground),
-                                in: RoundedRectangle(cornerRadius: Layout.corner))
+                                in: RoundedRectangle(cornerRadius: Metrics.corner))
                     .frame(minHeight: 220)
 
                 Picker("Où chercher", selection: $mode) {
@@ -49,7 +49,7 @@ struct TranscriptView: View {
 
                 Spacer()
             }
-            .padding(Layout.margin)
+            .padding(Metrics.margin)
             .navigationTitle("Transcription")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

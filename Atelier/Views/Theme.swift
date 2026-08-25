@@ -14,7 +14,7 @@ extension Font {
     }
 }
 
-enum Layout {
+enum Metrics {
     static let margin: CGFloat = 20
     static let marginWide: CGFloat = 32
     static let corner: CGFloat = 14
@@ -90,9 +90,9 @@ struct NoticeCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: Layout.corner))
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: Metrics.corner))
         .overlay(
-            RoundedRectangle(cornerRadius: Layout.corner)
+            RoundedRectangle(cornerRadius: Metrics.corner)
                 .stroke(isWarning ? Color.red.opacity(0.4) : Color(.separator), lineWidth: 1)
         )
     }

@@ -2,7 +2,9 @@ import SwiftUI
 
 @main
 struct AtelierApp: App {
-    @State private var store = AppStore()
+    // Sans valeur par défaut : l'expression par défaut serait évaluée en plus de celle
+    // de l'initialiseur, et le fichier JSON serait chargé deux fois au lancement.
+    @State private var store: AppStore
     @State private var sync: FolderSync
     @State private var engine: SearchEngine
     @Environment(\.scenePhase) private var scenePhase

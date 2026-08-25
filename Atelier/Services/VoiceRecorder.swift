@@ -13,12 +13,24 @@ import Observation
 @Observable
 final class VoiceRecorder {
 
-    private(set) var isRecording = false
-    private(set) var isTranscribing = false
+    /// Une seule étape à la fois. Un état unique évite que le panneau se ferme et se rouvre
+    /// entre la fin de l'enregistrement et le début de la transcription.
+    enum Phase: Equatable {
+        case idle
+        case recording
+        case transcribing
+    }
+
+    private(set) var phase: Phase = .idle
     private(set) var elapsed: TimeInterval = 0
     private(set) var errorText: String?
     /// Étape courante pendant la transcription, pour la feuille d'enregistrement.
     private(set) var stateText: String = ""
+
+    var isRecording: Bool { phase == .recording }
+    var isTranscribing: Bool { phase == .transcribing }
+    /// Vrai tant que le panneau doit rester ouvert.
+    var isBusy: Bool { phase != .idle }
 
     private var recorder: AVAudioRecorder?
     private var timer: Task<Void, Never>?
@@ -72,7 +84,7 @@ final class VoiceRecorder {
             }
             self.recorder = recorder
             self.fileURL = url
-            isRecording = true
+            phase = .recording
             elapsed = 0
             startTimer()
         } catch {
@@ -80,18 +92,30 @@ final class VoiceRecorder {
         }
     }
 
-    /// Arrête et renvoie les octets enregistrés.
+    /// Arrête et renvoie les octets enregistrés. L'état passe directement à `.transcribing`
+    /// pour que le panneau reste ouvert d'un bout à l'autre.
     func stop() async -> Data? {
         timer?.cancel()
         timer = nil
         recorder?.stop()
         recorder = nil
-        isRecording = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
 
-        guard let url = fileURL else { return nil }
+        guard let url = fileURL else {
+            phase = .idle
+            return nil
+        }
+        fileURL = nil
         defer { try? FileManager.default.removeItem(at: url) }
-        return try? Data(contentsOf: url)
+
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else {
+            phase = .idle
+            errorText = "L'enregistrement est vide."
+            return nil
+        }
+        phase = .transcribing
+        stateText = "Transcription en cours…"
+        return data
     }
 
     func cancel() {
@@ -99,8 +123,7 @@ final class VoiceRecorder {
         timer = nil
         recorder?.stop()
         recorder = nil
-        isRecording = false
-        isTranscribing = false
+        phase = .idle
         stateText = ""
         if let url = fileURL {
             try? FileManager.default.removeItem(at: url)
@@ -113,7 +136,7 @@ final class VoiceRecorder {
         timer = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
-                guard let self, self.isRecording else { return }
+                guard let self, self.phase == .recording else { return }
                 self.elapsed += 1
                 if self.elapsed >= Self.maximumDuration {
                     _ = await self.stop()
@@ -141,10 +164,10 @@ final class VoiceRecorder {
         store: AppStore,
         onDone: @escaping (String) -> Void
     ) async {
-        isTranscribing = true
+        phase = .transcribing
         stateText = "Transcription en cours…"
         defer {
-            isTranscribing = false
+            phase = .idle
             stateText = ""
         }
 

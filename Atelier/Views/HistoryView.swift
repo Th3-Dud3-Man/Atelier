@@ -28,10 +28,7 @@ struct HistoryView: View {
     var body: some View {
         List {
             Section {
-                EmptyView()
-            } header: {
                 monthHeader
-                    .textCase(nil)
             }
 
             if filtered.isEmpty {

@@ -298,16 +298,19 @@ final class SearchEngine {
         } else {
             if wantsFiles {
                 localSources = try await runFiles(analysis: analysis)
-                // Niveau 3 : un fichier catalogué semble concerner la question.
-                localSources = try await indexCandidatesIfNeeded(
-                    analysis: analysis, currentSources: localSources
-                )
             }
             if wantsWeb {
                 let result = try await runWeb(analysis: analysis, question: question)
                 webSources = result.sources
                 agentAnswer = result.answer
             }
+        }
+
+        // Niveau 3 du Smart Search, quelle que soit la priorité choisie : si l'analyse a repéré
+        // un fichier catalogué qui concerne manifestement la question et que la moisson est
+        // maigre, l'app le lit, l'indexe et refait la recherche en l'incluant.
+        if wantsFiles {
+            localSources = try await indexCandidatesIfNeeded(analysis: analysis, currentSources: localSources)
         }
 
         try Task.checkCancellation()

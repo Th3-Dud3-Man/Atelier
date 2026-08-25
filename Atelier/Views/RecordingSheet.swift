@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Petit panneau d'enregistrement : chrono, arrêt, annulation.
 struct RecordingSheet: View {
-    @Bindable var recorder: VoiceRecorder
-    @Environment(\.dismiss) private var dismiss
+    let recorder: VoiceRecorder
+    var onStop: () -> Void
 
     var body: some View {
         VStack(spacing: 16) {
@@ -36,6 +36,14 @@ struct RecordingSheet: View {
                         .foregroundStyle(.red)
                         .multilineTextAlignment(.center)
                 }
+
+                HStack(spacing: 10) {
+                    Button("Annuler") { recorder.cancel() }
+                        .buttonStyle(.bordered)
+                    Button("Terminer", action: onStop)
+                        .buttonStyle(.borderedProminent)
+                }
+                .padding(.top, 4)
             }
         }
         .padding(24)

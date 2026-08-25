@@ -20,7 +20,7 @@ struct HomeView: View {
     }
 
     private var margin: CGFloat {
-        sizeClass == .regular ? Layout.marginWide : Layout.margin
+        sizeClass == .regular ? Metrics.marginWide : Metrics.margin
     }
 
     var body: some View {
@@ -77,10 +77,10 @@ struct HomeView: View {
                  + "Le bouton micro de l'app, lui, sert aux enregistrements longs : maintenez-le "
                  + "pour enregistrer un mémo, qui sera transcrit puis relu avant de devenir une question.")
         }
-        .sheet(isPresented: Binding(get: { recorder.isRecording || recorder.isTranscribing },
+        .sheet(isPresented: Binding(get: { recorder.isBusy },
                                     set: { if !$0 { recorder.cancel() } })) {
-            RecordingSheet(recorder: recorder)
-                .presentationDetents([.height(260)])
+            RecordingSheet(recorder: recorder, onStop: finishRecording)
+                .presentationDetents([.height(280)])
                 .interactiveDismissDisabled(recorder.isTranscribing)
         }
     }
@@ -109,9 +109,9 @@ struct HomeView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: Layout.corner))
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: Metrics.corner))
         .overlay(
-            RoundedRectangle(cornerRadius: Layout.corner)
+            RoundedRectangle(cornerRadius: Metrics.corner)
                 .stroke(Color(.separator), lineWidth: 1)
         )
     }
@@ -127,24 +127,25 @@ struct HomeView: View {
 
     private var actions: some View {
         HStack(spacing: 12) {
-            Button {
-                micTapped()
-            } label: {
-                Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
-                    .font(.system(size: 20, weight: .medium))
-                    .frame(width: 52, height: 52)
-                    .background(
-                        Circle()
-                            .fill(recorder.isRecording ? Color.atelierAccent : Color(.secondarySystemGroupedBackground))
-                    )
-                    .overlay(Circle().stroke(Color(.separator), lineWidth: recorder.isRecording ? 0 : 1))
-                    .foregroundStyle(recorder.isRecording ? Color.white : Color.atelierAccent)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(recorder.isRecording ? "Arrêter l'enregistrement" : "Dicter ou enregistrer")
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.4).onEnded { _ in startRecording() }
-            )
+            // Volontairement pas un Button : un Button plus un appui long déclencherait les deux,
+            // et l'enregistrement s'arrêterait au relâchement du doigt. Les deux gestes posés
+            // séparément s'excluent proprement — l'appui long l'emporte s'il est tenu.
+            Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
+                .font(.system(size: 20, weight: .medium))
+                .frame(width: 52, height: 52)
+                .background(
+                    Circle()
+                        .fill(recorder.isRecording ? Color.atelierAccent : Color(.secondarySystemGroupedBackground))
+                )
+                .overlay(Circle().stroke(Color(.separator), lineWidth: recorder.isRecording ? 0 : 1))
+                .foregroundStyle(recorder.isRecording ? Color.white : Color.atelierAccent)
+                .contentShape(Circle())
+                .onTapGesture { micTapped() }
+                .onLongPressGesture(minimumDuration: 0.4) { startRecording() }
+                .accessibilityElement()
+                .accessibilityLabel(recorder.isRecording ? "Arrêter l'enregistrement" : "Dicter ou enregistrer")
+                .accessibilityHint("Touchez pour dicter, maintenez pour enregistrer un mémo")
+                .accessibilityAddTraits(.isButton)
 
             Button(action: launch) {
                 Text("Rechercher")
