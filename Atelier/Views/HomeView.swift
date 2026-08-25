@@ -85,8 +85,22 @@ struct HomeView: View {
         .sheet(isPresented: Binding(get: { recorder.isBusy },
                                     set: { if !$0 { recorder.cancel() } })) {
             RecordingSheet(recorder: recorder, onStop: finishRecording)
-                .presentationDetents([.height(280)])
+                .presentationDetents([.height(300)])
                 .interactiveDismissDisabled(recorder.isTranscribing)
+        }
+        // Micro refusé, session audio indisponible, transcription échouée : ces trois échecs
+        // laissent le panneau fermé, ou le referment en emportant leur message. Sans cette
+        // alerte, un appui long sur le micro ne produirait rien du tout à l'écran.
+        .alert(
+            "Enregistrement",
+            isPresented: Binding(
+                get: { recorder.errorText != nil && !recorder.isBusy },
+                set: { if !$0 { recorder.dismissError() } }
+            )
+        ) {
+            Button("Fermer") { recorder.dismissError() }
+        } message: {
+            Text(recorder.errorText ?? "")
         }
     }
 

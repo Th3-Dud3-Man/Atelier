@@ -39,15 +39,32 @@ struct AppData: Codable, Sendable {
 @Observable
 final class AppStore {
     private(set) var data: AppData
-    /// Dernière erreur d'écriture, montrée dans Diagnostics plutôt que perdue.
+    /// Dernière erreur de lecture ou d'écriture, montrée dans Diagnostics plutôt que perdue.
     private(set) var lastPersistenceError: String?
+    /// Vrai quand le fichier existe mais n'a pas pu être lu. Dans ce cas l'app fonctionne
+    /// normalement, mais **n'écrit rien** : écraser des données qu'on n'a pas su relire
+    /// serait le seul vrai moyen de les perdre.
+    private(set) var isReadOnly = false
 
     private var saveTask: Task<Void, Never>?
+    /// Les écritures sont chaînées : un instantané plus ancien ne doit jamais arriver après
+    /// un plus récent, ce qui ferait reculer les données.
+    private var writeTask: Task<Void, Never>?
     private let fileURL: URL
+
+    /// Au-delà, les recherches les plus anciennes sont oubliées : le fichier est réécrit
+    /// en entier à chaque modification, et rien ne justifie qu'il grossisse sans fin.
+    static let maximumSearches = 500
+    /// Les dépenses sont conservées treize mois : de quoi couvrir le compteur du mois
+    /// et une année complète de comparaison.
+    static let costRetention: TimeInterval = 13 * 30 * 24 * 3600
 
     init(fileURL: URL? = nil) {
         self.fileURL = fileURL ?? AppStore.defaultFileURL()
-        self.data = AppStore.load(from: self.fileURL)
+        let outcome = AppStore.load(from: self.fileURL)
+        self.data = outcome.data
+        self.isReadOnly = outcome.readOnly
+        self.lastPersistenceError = outcome.error
     }
 
     static func defaultFileURL() -> URL {
@@ -57,17 +74,37 @@ final class AppStore {
 
     // ── Lecture ──────────────────────────────────────────────────────
 
-    private static func load(from url: URL) -> AppData {
-        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return AppData() }
+    /// Deux échecs très différents se cachent derrière « le fichier ne se lit pas ».
+    /// Un contenu corrompu se met de côté et on repart à neuf. Une erreur d'accès — disque
+    /// occupé, données encore protégées après un redémarrage — ne dit rien du contenu :
+    /// on refuse alors d'écrire, plutôt que de remplacer un historique intact par du vide.
+    private static func load(from url: URL) -> (data: AppData, readOnly: Bool, error: String?) {
+        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else {
+            return (AppData(), false, nil)
+        }
+
+        let raw: Data
         do {
-            let raw = try Data(contentsOf: url)
-            return try decoder().decode(AppData.self, from: raw)
+            raw = try Data(contentsOf: url)
         } catch {
-            // Un fichier illisible est mis de côté plutôt qu'écrasé : rien ne disparaît en silence.
+            return (AppData(), true, "Vos données n'ont pas pu être lues (\(error.localizedDescription)). "
+                + "L'app fonctionne, mais n'enregistrera rien tant qu'elle n'aura pas relu le fichier : "
+                + "relancez-la dans un moment.")
+        }
+
+        do {
+            return (try decoder().decode(AppData.self, from: raw), false, nil)
+        } catch {
             let backup = url.deletingLastPathComponent()
                 .appendingPathComponent("atelier-illisible-\(Int(Date.now.timeIntervalSince1970)).json")
-            try? FileManager.default.moveItem(at: url, to: backup)
-            return AppData()
+            do {
+                try FileManager.default.moveItem(at: url, to: backup)
+                return (AppData(), false, "Le fichier de données était illisible. Il a été mis de côté "
+                    + "sous « \(backup.lastPathComponent) » et l'app repart à neuf.")
+            } catch {
+                return (AppData(), true, "Le fichier de données est illisible et n'a pas pu être mis "
+                    + "de côté. L'app n'enregistrera rien pour ne pas l'écraser.")
+            }
         }
     }
 
@@ -77,7 +114,16 @@ final class AppStore {
         return decoder
     }
 
+    /// Sur disque, compact : le fichier est réécrit en entier à chaque modification.
     private static func encoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }
+
+    /// Pour l'export, lisible : il est destiné à être ouvert et relu.
+    private static func exportEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -98,17 +144,28 @@ final class AppStore {
 
     func saveNow() async {
         saveTask?.cancel()
+        guard !isReadOnly else { return }
+
         let snapshot = data
         let destination = fileURL
-        do {
-            let encoded = try AppStore.encoder().encode(snapshot)
-            try await Task.detached(priority: .utility) {
-                try encoded.write(to: destination, options: [.atomic])
-            }.value
-            lastPersistenceError = nil
-        } catch {
-            lastPersistenceError = error.localizedDescription
+        let previous = writeTask
+
+        let task = Task { @MainActor [weak self] in
+            // Chaînage : l'écriture précédente doit être finie avant celle-ci, sinon un
+            // instantané plus ancien pourrait atterrir après un plus récent.
+            _ = await previous?.value
+            do {
+                let encoded = try AppStore.encoder().encode(snapshot)
+                try await Task.detached(priority: .utility) {
+                    try encoded.write(to: destination, options: [.atomic])
+                }.value
+                self?.lastPersistenceError = nil
+            } catch {
+                self?.lastPersistenceError = error.localizedDescription
+            }
         }
+        writeTask = task
+        await task.value
     }
 
     /// Modifie les données et programme une écriture.
@@ -140,6 +197,9 @@ final class AppStore {
                 data.searches[index] = record
             } else {
                 data.searches.insert(record, at: 0)
+                if data.searches.count > AppStore.maximumSearches {
+                    data.searches.removeLast(data.searches.count - AppStore.maximumSearches)
+                }
             }
         }
     }
@@ -211,7 +271,13 @@ final class AppStore {
     // ── Coûts ────────────────────────────────────────────────────────
 
     func record(_ entry: CostEntry) {
-        update { $0.costs.append(entry) }
+        update { data in
+            data.costs.append(entry)
+            let cutoff = Date.now.addingTimeInterval(-AppStore.costRetention)
+            if data.costs.contains(where: { $0.date < cutoff }) {
+                data.costs.removeAll { $0.date < cutoff }
+            }
+        }
     }
 
     func monthTotal(_ month: String = CostEntry.monthKey(for: .now)) -> Double {
@@ -253,7 +319,7 @@ final class AppStore {
     // ── Export / import ──────────────────────────────────────────────
 
     func exportData() throws -> Data {
-        try AppStore.encoder().encode(data)
+        try AppStore.exportEncoder().encode(data)
     }
 
     func importData(_ raw: Data, replacing: Bool) throws {

@@ -216,11 +216,20 @@ final class FolderSync: FileIndexing {
             lastError = "Ajoutez votre clé Gemini dans les réglages pour indexer vos fichiers."
             return
         }
+        guard !store.capReached else {
+            lastError = capMessage
+            return
+        }
         guard await ensureStore() else { return }
 
         var done = 0
         for entry in pending {
             if Task.isCancelled { return }
+            // Le plafond peut être franchi en cours de lot : chaque fichier a son coût.
+            if store.capReached {
+                lastError = capMessage
+                return
+            }
             done += 1
             progressText = "Indexation \(done) / \(pending.count) — \(entry.name)"
             await index(entry)
@@ -238,10 +247,10 @@ final class FolderSync: FileIndexing {
         guard !orphans.isEmpty, !store.settings.storeName.isEmpty else { return }
 
         progressText = "Vérification du corpus…"
-        guard let table = try? await gemini.documentNamesByDisplayName() else { return }
+        guard let table = try? await gemini.documentNamesByPath() else { return }
 
         let repaired = orphans.compactMap { entry -> FileEntry? in
-            guard let name = table[entry.name] else { return nil }
+            guard let name = table[entry.relativePath] else { return nil }
             var copy = entry
             copy.storeDocumentName = name
             return copy
@@ -251,8 +260,15 @@ final class FolderSync: FileIndexing {
         }
     }
 
+    /// Message unique du mode gratuit, pour ne pas le formuler à deux endroits.
+    private var capMessage: String {
+        "Plafond mensuel atteint (\(CostModel.format(store.settings.monthlyCapUSD))) : "
+            + "l'indexation reprendra après avoir relevé le plafond dans les réglages."
+    }
+
     /// Niveau 3 du Smart Search : indexer un fichier précis, à la demande du moteur de recherche.
     func indexOnDemand(fileID: String) async throws -> Bool {
+        guard !store.capReached else { return false }
         guard let entry = store.file(id: fileID),
               SupportedTypes.isSupported(entry.name),
               entry.size <= SupportedTypes.maxFileBytes
@@ -331,24 +347,37 @@ final class FolderSync: FileIndexing {
         isScanning = true
         progressText = "Remise à zéro du corpus…"
 
+        // Une suppression qui échoue — appareil hors ligne, 429 — laisserait un document
+        // orphelin chez Google, et le fichier serait renvoyé : deux exemplaires du même texte
+        // dans le corpus, et des citations trompeuses. On ne repart donc de zéro que pour ce
+        // qui a réellement été supprimé.
         let client = gemini
-        let names = store.files.compactMap(\.storeDocumentName).filter { !$0.isEmpty }
-        for name in names {
-            try? await client.deleteDocument(named: name)
-        }
-
-        let reset = store.files.map { file -> FileEntry in
+        var stillThere = 0
+        var reset: [FileEntry] = []
+        for file in store.files {
             var copy = file
+            if let name = copy.storeDocumentName, !name.isEmpty {
+                do {
+                    try await client.deleteDocument(named: name)
+                    copy.storeDocumentName = nil
+                } catch {
+                    stillThere += 1
+                    continue   // on garde le nom pour pouvoir réessayer plus tard
+                }
+            }
             if copy.status == .indexed || copy.status == .failed {
                 copy.status = .cataloged
             }
-            copy.storeDocumentName = nil
             copy.indexedAt = nil
             copy.indexedSignature = nil
             copy.errorMessage = nil
-            return copy
+            reset.append(copy)
         }
         store.upsertFiles(reset)
+        if stillThere > 0 {
+            lastError = "\(stillThere) document(s) n'ont pas pu être retirés du corpus et seront "
+                + "réessayés plus tard ; ils ne sont pas réindexés pour éviter les doublons."
+        }
         isScanning = false
         await scanAll(force: true)
     }
@@ -390,16 +419,31 @@ final class FolderSync: FileIndexing {
 
         do {
             let data = try await Self.readFile(bookmark: folder.bookmark, relativePath: entry.relativePath)
-            let destination = FileManager.default.temporaryDirectory
-                .appendingPathComponent("apercu", isDirectory: true)
-            try? FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+            // Un sous-dossier par entrée : deux fichiers nommés « notes.pdf » dans deux dossiers
+            // différents ne peuvent ainsi pas se recouvrir, tout en gardant leur nom lisible
+            // — c'est celui que QuickLook affiche en titre.
+            let destination = Self.previewsDirectory
+                .appendingPathComponent(String(UInt(bitPattern: entry.id.hashValue)), isDirectory: true)
+            try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
             let fileURL = destination.appendingPathComponent(entry.name)
-            try data.write(to: fileURL, options: .atomic)
+            // La copie est en clair : elle est protégée au repos et effacée à la fermeture
+            // de l'aperçu comme au lancement suivant.
+            try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
             return fileURL
         } catch {
             lastError = "Ce document n'a pas pu être ouvert : \(error.localizedDescription)"
             return nil
         }
+    }
+
+    private static var previewsDirectory: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("apercu", isDirectory: true)
+    }
+
+    /// Efface les copies d'aperçu. Appelée au lancement et à la fermeture de chaque aperçu :
+    /// aucun document ne reste en clair dans le dossier temporaire une fois l'aperçu refermé.
+    func clearPreviews() {
+        try? FileManager.default.removeItem(at: Self.previewsDirectory)
     }
 
     /// Retrouve l'entrée du registre correspondant à une source citée.

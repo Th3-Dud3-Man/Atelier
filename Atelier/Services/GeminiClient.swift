@@ -377,6 +377,12 @@ struct GeminiClient: Sendable {
         var displayName: String?
         var state: String?
         var sizeBytes: String?
+        var customMetadata: [Metadata]?
+
+        /// Chemin relatif rangé à l'indexation : c'est lui qui identifie vraiment le fichier.
+        var path: String? {
+            customMetadata?.first { $0.key == "path" }?.stringValue
+        }
     }
 
     /// La pagination plafonne à 20 éléments par page : il faut boucler.
@@ -503,7 +509,12 @@ struct GeminiClient: Sendable {
                                message: "L'indexation par Google prend trop de temps.")
             }
             try await Task.sleep(for: .seconds(3))
-            guard let name = current.name, !name.isEmpty else { break }
+            // Sans nom, l'opération n'est pas interrogeable : on ne peut pas conclure qu'elle
+            // a réussi. La déclarer en échec fait réessayer au scan suivant, ce qui est juste.
+            guard let name = current.name, !name.isEmpty else {
+                throw APIError(provider: "Gemini", status: 0,
+                               message: "Google n'a pas rendu d'opération suivable pour ce fichier.")
+            }
             let (data, _) = try await HTTP.send(request(path: "/v1beta/\(name)"), provider: "Gemini", attempts: 2)
             current = try JSONDecoder().decode(Operation.self, from: data)
         }
@@ -515,12 +526,18 @@ struct GeminiClient: Sendable {
         return current
     }
 
-    /// Table « nom affiché → nom de document », obtenue en une seule traversée du corpus.
-    func documentNamesByDisplayName() async throws -> [String: String] {
+    /// Table « chemin relatif → nom de document », obtenue en une seule traversée du corpus.
+    ///
+    /// La clé est le chemin, pas le nom affiché : deux fichiers peuvent très bien s'appeler
+    /// « notes.pdf » dans deux sous-dossiers différents, et les confondre ferait disparaître
+    /// le contenu de l'un en réindexant l'autre.
+    func documentNamesByPath() async throws -> [String: String] {
         var table: [String: String] = [:]
         for document in try await listDocuments() {
-            guard let display = document.displayName, let name = document.name else { continue }
-            table[display] = name
+            guard let name = document.name else { continue }
+            if let path = document.path {
+                table[path] = name
+            }
         }
         return table
     }
@@ -685,10 +702,16 @@ struct GeminiClient: Sendable {
                 var state: String?
                 var uri: String?
             }
-            state = (try? JSONDecoder().decode(BareFile.self, from: statusData))?.state ?? "ACTIVE"
+            // Un corps illisible ne dit rien : on garde l'état précédent plutôt que de
+            // conclure que le fichier est prêt et de l'utiliser trop tôt.
+            state = (try? JSONDecoder().decode(BareFile.self, from: statusData))?.state ?? state
         }
         guard state != "FAILED" else {
             throw APIError(provider: "Gemini", status: 0, message: "Google n'a pas pu lire l'enregistrement.")
+        }
+        guard state == "ACTIVE" else {
+            throw APIError(provider: "Gemini", status: 0,
+                           message: "Google met trop de temps à préparer l'enregistrement.")
         }
         return uri
     }

@@ -26,6 +26,9 @@ final class VoiceRecorder {
     private(set) var errorText: String?
     /// Étape courante pendant la transcription, pour la feuille d'enregistrement.
     private(set) var stateText: String = ""
+    /// Vrai quand l'heure est écoulée : la capture s'arrête, mais l'enregistrement reste
+    /// en main de l'utilisateur, qui touche Terminer pour le faire transcrire.
+    private(set) var limitReached = false
 
     var isRecording: Bool { phase == .recording }
     var isTranscribing: Bool { phase == .transcribing }
@@ -48,6 +51,7 @@ final class VoiceRecorder {
 
     func start() async {
         errorText = nil
+        limitReached = false
         guard await requestPermission() else {
             errorText = "L'accès au micro est refusé. Vous pouvez l'autoriser dans Réglages › L'Atelier."
             return
@@ -97,11 +101,8 @@ final class VoiceRecorder {
     /// Arrête et renvoie les octets enregistrés. L'état passe directement à `.transcribing`
     /// pour que le panneau reste ouvert d'un bout à l'autre.
     func stop() async -> Data? {
-        timer?.cancel()
-        timer = nil
-        recorder?.stop()
-        recorder = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        endCapture()
+        limitReached = false
 
         guard let url = fileURL else {
             phase = .idle
@@ -121,17 +122,28 @@ final class VoiceRecorder {
     }
 
     func cancel() {
-        timer?.cancel()
-        timer = nil
-        recorder?.stop()
-        recorder = nil
+        endCapture()
         phase = .idle
         stateText = ""
+        limitReached = false
         if let url = fileURL {
             try? FileManager.default.removeItem(at: url)
         }
         fileURL = nil
+    }
+
+    /// Coupe le micro et le chrono sans toucher à l'état affiché ni au fichier déjà écrit.
+    private func endCapture() {
+        timer?.cancel()
+        timer = nil
+        recorder?.stop()
+        recorder = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    /// Efface le message d'erreur une fois qu'il a été lu.
+    func dismissError() {
+        errorText = nil
     }
 
     private func startTimer() {
@@ -141,7 +153,13 @@ final class VoiceRecorder {
                 guard let self, self.phase == .recording else { return }
                 self.elapsed += 1
                 if self.elapsed >= Self.maximumDuration {
-                    _ = await self.stop()
+                    // Surtout pas `stop()` ici : il ferait passer l'état à « transcription »
+                    // sans que personne n'envoie l'audio, et le panneau, non refermable
+                    // pendant une transcription, resterait bloqué sur sa roue.
+                    // On coupe seulement la capture et on laisse le bouton Terminer faire
+                    // son travail.
+                    self.endCapture()
+                    self.limitReached = true
                     return
                 }
             }

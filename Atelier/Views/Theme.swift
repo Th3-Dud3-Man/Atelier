@@ -44,14 +44,19 @@ struct Chip: View {
 /// Ligne d'état unique, en gris, au-dessus des résultats. Jamais de roue plein écran.
 struct StatusLine: View {
     let text: String
+    /// La roue ne tourne que pendant le travail : « Recherche arrêtée. » ou « Résultat réutilisé »
+    /// sont des états terminaux, et une roue qui continue à tourner à côté les contredit.
+    var isActive: Bool = true
     var showsStop: Bool = false
     var onStop: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 10) {
             if !text.isEmpty {
-                ProgressView()
-                    .controlSize(.mini)
+                if isActive {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
                 Text(text)
                     .font(.footnote)
                     .foregroundStyle(.secondary)

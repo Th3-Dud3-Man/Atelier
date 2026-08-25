@@ -11,11 +11,15 @@ struct SettingsView: View {
     @State private var geminiKey = ""
     @State private var perplexityKey = ""
     @State private var keyTest: String?
+    /// Message affiché quand le trousseau refuse une clé, ou quand un import échoue.
+    @State private var keychainError: String?
+    @State private var importError: String?
     @State private var testing = false
     @State private var exporting = false
     @State private var importing = false
     @State private var importReplaces = false
     @State private var confirmingClear = false
+    @State private var confirmingReplace = false
     /// Encodé au moment du clic, et non à chaque rafraîchissement de la vue.
     @State private var exportPayload = Data()
 
@@ -48,7 +52,7 @@ struct SettingsView: View {
             }
             // Une clé collée puis l'écran refermé sans toucher le bouton serait perdue :
             // on enregistre aussi à la fermeture.
-            .onDisappear { saveKeys() }
+            .onDisappear { _ = saveKeys() }
             .fileExporter(
                 isPresented: $exporting,
                 document: JSONDocument(data: exportPayload),
@@ -56,12 +60,38 @@ struct SettingsView: View {
                 defaultFilename: "atelier-\(exportDateStamp)"
             ) { _ in exportPayload = Data() }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
-                guard case .success(let url) = result else { return }
-                let accessed = url.startAccessingSecurityScopedResource()
-                defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-                if let data = try? Data(contentsOf: url) {
-                    try? store.importData(data, replacing: importReplaces)
+                importError = nil
+                switch result {
+                case .failure(let error):
+                    importError = error.localizedDescription
+                case .success(let url):
+                    let accessed = url.startAccessingSecurityScopedResource()
+                    defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                    do {
+                        let data = try Data(contentsOf: url)
+                        try store.importData(data, replacing: importReplaces)
+                        importError = nil
+                    } catch is DecodingError {
+                        // Le cas le plus probable : un JSON qui n'est pas un export de L'Atelier.
+                        importError = "Ce fichier n'est pas un export de L'Atelier : rien n'a été modifié."
+                    } catch {
+                        importError = "Lecture impossible : \(error.localizedDescription)"
+                    }
                 }
+            }
+            .confirmationDialog(
+                "Remplacer toutes les données ?",
+                isPresented: $confirmingReplace,
+                titleVisibility: .visible
+            ) {
+                Button("Remplacer", role: .destructive) {
+                    importReplaces = true
+                    importing = true
+                }
+            } message: {
+                Text("L'historique, les coûts, le registre des fichiers et les dossiers surveillés "
+                     + "sont remplacés par le contenu du fichier choisi. Cette opération ne peut pas "
+                     + "être annulée : exportez d'abord si vous n'êtes pas sûr.")
             }
             .confirmationDialog("Effacer l'historique ?", isPresented: $confirmingClear, titleVisibility: .visible) {
                 Button("Effacer", role: .destructive) { store.clearHistory() }
@@ -80,18 +110,18 @@ struct SettingsView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .multilineTextAlignment(.trailing)
-                    .onSubmit { Keychain.set(geminiKey, for: .gemini) }
+                    .onSubmit { _ = saveKeys() }
             }
             LabeledContent("Perplexity") {
                 SecureField("Clé API (facultative)", text: $perplexityKey)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .multilineTextAlignment(.trailing)
-                    .onSubmit { Keychain.set(perplexityKey, for: .perplexity) }
+                    .onSubmit { _ = saveKeys() }
             }
 
             Button {
-                saveKeys()
+                guard saveKeys() else { return }
                 Task { await testKeys() }
             } label: {
                 HStack {
@@ -103,6 +133,12 @@ struct SettingsView: View {
                 }
             }
             .disabled(testing)
+
+            if let keychainError {
+                Text(keychainError)
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+            }
 
             if let result = keyTest {
                 Text(result).font(.footnote).foregroundStyle(.secondary)
@@ -117,9 +153,22 @@ struct SettingsView: View {
         }
     }
 
-    private func saveKeys() {
-        Keychain.set(geminiKey, for: .gemini)
-        Keychain.set(perplexityKey, for: .perplexity)
+    /// Renvoie faux si le trousseau a refusé une des deux clés, pour que l'écran le dise
+    /// au lieu de laisser croire que tout est en place.
+    @discardableResult
+    private func saveKeys() -> Bool {
+        let gemini = Keychain.set(geminiKey, for: .gemini)
+        let perplexity = Keychain.set(perplexityKey, for: .perplexity)
+        if gemini && perplexity {
+            keychainError = nil
+            return true
+        }
+        var refused: [String] = []
+        if !gemini { refused.append("Gemini") }
+        if !perplexity { refused.append("Perplexity") }
+        keychainError = "Le trousseau a refusé d'enregistrer la clé \(refused.joined(separator: " et ")). "
+            + "Déverrouillez l'appareil, puis réessayez."
+        return false
     }
 
     private func testKeys() async {
@@ -261,11 +310,12 @@ struct SettingsView: View {
                 importReplaces = false
                 importing = true
             }
-            Button("Importer et remplacer", role: .destructive) {
-                importReplaces = true
-                importing = true
-            }
+            Button("Importer et remplacer", role: .destructive) { confirmingReplace = true }
             Button("Effacer l'historique", role: .destructive) { confirmingClear = true }
+
+            if let importError {
+                Text(importError).font(.footnote).foregroundStyle(.orange)
+            }
         }
     }
 

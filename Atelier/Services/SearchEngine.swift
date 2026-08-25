@@ -119,7 +119,16 @@ final class SearchEngine {
     /// - Parameter allowReuse: mettre à faux pour forcer une vraie recherche.
     ///   « Relancer », « Compléter sur Internet » et « Approfondir » passent par là : sans cela,
     ///   la question étant identique, la réutilisation gratuite les rendrait sans effet.
-    func start(question: String, mode: SourceMode, rawTranscript: String? = nil, allowReuse: Bool = true) {
+    /// `keeping` et `forced` servent au bouton « Compléter » : la moitié déjà obtenue est
+    /// reprise telle quelle, et seule la moitié manquante est relancée — et donc facturée.
+    func start(
+        question: String,
+        mode: SourceMode,
+        rawTranscript: String? = nil,
+        allowReuse: Bool = true,
+        keeping: [SourceRef] = [],
+        forced: SourceMode? = nil
+    ) {
         let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
@@ -135,6 +144,9 @@ final class SearchEngine {
         fresh.sourceMode = mode
         fresh.priority = store.settings.priority
         fresh.webLevel = mode == .files ? nil : store.settings.webLevel
+        // Les passages conservés s'affichent dès le départ : la moitié déjà lue ne disparaît pas
+        // de l'écran pendant que l'autre se cherche.
+        fresh.sources = keeping
         record = fresh
         // Enregistrée dès sa création : une recherche interrompue par une fermeture de l'app
         // ne doit pas disparaître de l'historique en laissant son coût au compteur.
@@ -142,7 +154,10 @@ final class SearchEngine {
 
         let runID = fresh.id
         task = Task { [weak self] in
-            await self?.run(question: trimmed, mode: mode, runID: runID, allowReuse: allowReuse)
+            await self?.run(
+                question: trimmed, mode: mode, runID: runID,
+                allowReuse: allowReuse, keeping: keeping, forced: forced
+            )
         }
     }
 
@@ -186,9 +201,20 @@ final class SearchEngine {
     }
 
     /// Relance en ajoutant Internet à un résultat obtenu sur les seuls fichiers.
+    /// Le mode est bien « les deux » : relancer sur `.web` seul remplacerait les passages
+    /// locaux au lieu de les compléter, et ferait disparaître le bouton avec eux.
     func completeWithWeb() {
         guard let current = record else { return }
-        start(question: current.question, mode: .web, allowReuse: false)
+        let kept = current.localSources
+        start(
+            question: current.question,
+            mode: .both,
+            allowReuse: false,
+            keeping: kept,
+            // Rien à garder — le résultat précédent n'avait aucun passage local : autant
+            // laisser l'analyse choisir les deux moitiés.
+            forced: kept.isEmpty ? nil : .web
+        )
     }
 
     /// Relance au niveau approfondi.
@@ -200,7 +226,14 @@ final class SearchEngine {
 
     // ── Déroulé ──────────────────────────────────────────────────────
 
-    private func run(question: String, mode: SourceMode, runID: String, allowReuse: Bool) async {
+    private func run(
+        question: String,
+        mode: SourceMode,
+        runID: String,
+        allowReuse: Bool,
+        keeping: [SourceRef] = [],
+        forced: SourceMode? = nil
+    ) async {
         do {
             // 1. Étape gratuite : la même question a-t-elle déjà reçu une réponse ?
             if allowReuse,
@@ -253,7 +286,10 @@ final class SearchEngine {
                 return
             }
 
-            try await proceed(question: question, mode: mode, analysis: analysis, runID: runID)
+            try await proceed(
+                question: question, mode: mode, analysis: analysis, runID: runID,
+                forced: forced, keeping: keeping
+            )
         } catch is CancellationError {
             if isCurrent(runID) {
                 phase = .canceled
@@ -369,7 +405,10 @@ final class SearchEngine {
         mutate(runID) { current in
             // En mode « Compléter », la source affichée reflète les deux moitiés.
             current.effectiveSource = keeping.isEmpty ? resolved : .both
-            current.webLevel = resolved == .files ? nil : self.store.settings.webLevel
+            // Le niveau se lit sur ce que la fiche montre, pas sur la moitié relancée :
+            // en « Compléter les fichiers », `resolved` vaut `.files` alors que la fiche
+            // conserve des sources web, dont le niveau doit rester affiché.
+            current.webLevel = current.effectiveSource == .files ? nil : self.store.settings.webLevel
         }
 
         // Le plafond a pu être franchi entre-temps, par une question de suite par exemple.
@@ -641,7 +680,12 @@ final class SearchEngine {
         }
 
         setStatus(runID, phase: .searchingFiles, text: "Nouvelle recherche dans vos fichiers…")
-        return try await searchFiles(analysis: analysis, runID: runID)
+        let refreshed = try await searchFiles(analysis: analysis, runID: runID)
+        // Le classement de File Search change quand de nouveaux documents entrent dans le store :
+        // la seconde recherche peut rapporter moins que la première. On garde alors la meilleure
+        // des deux, plutôt que d'appauvrir la synthèse au moment même où l'on annonce l'avoir
+        // enrichie.
+        return refreshed.count >= currentSources.count ? refreshed : currentSources
     }
 
     private func synthesize(

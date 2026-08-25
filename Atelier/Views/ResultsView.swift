@@ -79,7 +79,7 @@ struct ResultsView: View {
                 }
             }
         }
-        .sheet(item: $previewedFile) { target in
+        .sheet(item: $previewedFile, onDismiss: { sync.clearPreviews() }) { target in
             DocumentPreview(url: target.url, page: target.page)
         }
     }
@@ -106,6 +106,7 @@ struct ResultsView: View {
 
                 StatusLine(
                     text: engine.statusText,
+                    isActive: engine.isRunning,
                     showsStop: engine.isRunning,
                     onStop: { engine.cancel() }
                 )

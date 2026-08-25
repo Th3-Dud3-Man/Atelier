@@ -16,6 +16,8 @@ struct AtelierApp: App {
         _store = State(initialValue: store)
         _sync = State(initialValue: sync)
         _engine = State(initialValue: SearchEngine(store: store, indexer: sync))
+        // Une copie d'aperçu laissée par un arrêt brutal n'a pas à survivre au lancement suivant.
+        sync.clearPreviews()
     }
 
     var body: some Scene {

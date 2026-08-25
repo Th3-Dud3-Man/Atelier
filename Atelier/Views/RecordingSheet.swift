@@ -18,17 +18,21 @@ struct RecordingSheet: View {
                     .multilineTextAlignment(.center)
             } else {
                 Circle()
-                    .fill(Color.red)
+                    .fill(recorder.limitReached ? Color.secondary : Color.red)
                     .frame(width: 14, height: 14)
-                    .opacity(recorder.isRecording ? 1 : 0.3)
+                    .opacity(recorder.isRecording && !recorder.limitReached ? 1 : 0.3)
 
                 Text(recorder.elapsedText)
                     .font(.system(size: 40, weight: .light, design: .rounded))
                     .monospacedDigit()
 
-                Text("Parlez, puis touchez Terminer.")
+                Text(recorder.limitReached
+                     ? "Limite d'une heure atteinte : l'enregistrement s'est arrêté. "
+                        + "Touchez Terminer pour le faire transcrire."
+                     : "Parlez, puis touchez Terminer.")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(recorder.limitReached ? Color.primary : Color.secondary)
+                    .multilineTextAlignment(.center)
 
                 if let error = recorder.errorText {
                     Text(error)
