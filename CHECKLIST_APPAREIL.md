@@ -172,29 +172,31 @@ seulement les vingt premières lignes, celles qui portent `Exception Type`,
 
 ## Étape 7 — La voix
 
-**La dictée en direct.** Sur l'accueil, touchez le **micro rond** (une touche brève, sans
-maintenir).
+Touchez le **micro rond** sur l'accueil, dites une phrase avec quelques hésitations
+volontaires — « euh, je voulais, je voulais savoir, du coup, ce que dit le contrat sur
+le préavis, voilà » — puis touchez-le à nouveau.
 
-**Attendu :** iOS demande une fois l'autorisation du micro et de la reconnaissance vocale.
-Le micro devient bleu, la ligne sous le champ affiche « J'écoute », et le texte s'écrit au
-fil de votre parole. Une seconde touche arrête. Le clavier ne s'ouvre pas.
+**Attendu :** iOS demande une fois l'autorisation du micro. Le micro devient bleu, la
+ligne sous le champ affiche « J'écoute » et un chronomètre. À la seconde touche :
+« Transcription… », puis le texte arrive **dans le champ de recherche**, nettoyé :
+« Je voulais savoir ce que dit le contrat sur le préavis. » Sans les « euh », sans le
+« je voulais » répété, sans le « voilà ».
 
 **Points à me rapporter :**
-- « La reconnaissance hors ligne n'est pas installée » → allez dans Réglages › Général ›
-  Clavier › Dictée et activez-la, puis réessayez. Si le message revient, dites-le-moi.
-- Le texte arrive mais sans aucune ponctuation → dites-le-moi.
-- Rien ne s'écrit alors que le micro est bleu → dites-le-moi, avec le modèle d'iPhone.
-
-**Le mémo long.** Maintenez le micro une demi-seconde.
-
-**Attendu :** un panneau s'ouvre avec un chronomètre. Parlez trente secondes, touchez
-**Terminer** : « Transcription en cours… », puis un écran de relecture avec le texte.
-
-**Points de vigilance :**
+- Le texte arrive mais garde les hésitations → dites-le-moi, c'est une consigne à durcir
+  dans le texte d'instruction, pas du code.
+- Le texte est reformulé, ou des mots ont changé de sens → dites-le-moi, c'est l'inverse :
+  la consigne est trop permissive.
 - Une erreur mentionnant un format audio → copiez-la-moi telle quelle : c'est le point que
   seule une vraie transcription peut trancher.
-- Au bout d'une heure, l'enregistrement s'arrête tout seul et le panneau doit rester
-  utilisable, avec « Limite d'une heure atteinte » et le bouton Terminer actif.
+- Rien ne se passe, ou l'app s'arrête → voyez la section « Si l'app s'arrête brutalement »
+  ci-dessus.
+
+**Le texte long.** Dictez plus de deux ou trois phrases : au-delà de 280 caractères, la
+transcription s'ouvre dans un écran de relecture au lieu d'aller dans le champ.
+
+**La limite d'une heure.** L'enregistrement s'arrête tout seul, la ligne affiche « Limite
+d'une heure atteinte », et le micro reste actif pour lancer la transcription.
 
 ## Étape 8 — L'iPad
 

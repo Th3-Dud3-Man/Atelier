@@ -30,6 +30,14 @@ final class VoiceRecorder {
     /// en main de l'utilisateur, qui touche Terminer pour le faire transcrire.
     private(set) var limitReached = false
 
+    /// Quand la raison d'usage du micro manque du fichier de description, iOS ne refuse pas
+    /// l'accès : il **arrête l'app**. On le vérifie avant de rien demander, et les réglages
+    /// affichent la même information sans rien déclencher.
+    static var missingUsageDescription: String? {
+        let value = Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription") as? String
+        return (value?.isEmpty ?? true) ? "le micro" : nil
+    }
+
     var isRecording: Bool { phase == .recording }
     var isTranscribing: Bool { phase == .transcribing }
     /// Vrai tant que le panneau doit rester ouvert.
@@ -52,6 +60,11 @@ final class VoiceRecorder {
     func start() async {
         errorText = nil
         limitReached = false
+        if let missing = Self.missingUsageDescription {
+            errorText = "Cette version de l'app ne déclare pas d'autorisation pour \(missing) : "
+                + "iOS refuse donc l'accès. Signalez-le-moi, c'est une ligne à corriger."
+            return
+        }
         guard await requestPermission() else {
             errorText = "L'accès au micro est refusé. Vous pouvez l'autoriser dans Réglages › L'Atelier."
             return

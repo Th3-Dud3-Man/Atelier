@@ -13,7 +13,6 @@ struct HomeView: View {
     @State private var question = ""
     @State private var mode: SourceMode = .auto
     @State private var recorder = VoiceRecorder()
-    @State private var dictation = LiveDictation()
     @FocusState private var fieldFocused: Bool
 
     private var trimmed: String {
@@ -67,43 +66,19 @@ struct HomeView: View {
             .padding(.horizontal, margin)
         }
         .animation(.easeInOut(duration: 0.18), value: fieldFocused)
-        .animation(.easeInOut(duration: 0.18), value: dictation.isListening)
+        .animation(.easeInOut(duration: 0.18), value: recorder.phase)
         .toolbar { toolbarContent }
         .navigationBarTitleDisplayMode(.inline)
         // Volontairement pas de mise au point à l'ouverture : arriver sur un clavier déjà
         // déplié est brutal, et masque la moitié de l'écran avant qu'on ait rien demandé.
         // Le clavier vient quand on touche le champ, ou après « Nouvelle recherche ».
         .onChange(of: router.focusRequests) { _, _ in fieldFocused = true }
-        // La dictée écrit dans le champ au fil de la parole : le texte reconnu remplace ce
-        // qui s'y trouvait, préfixe compris, sans toucher à ce que l'on tape à la main.
-        .onChange(of: dictation.text) { _, spoken in
-            guard dictation.isListening || !spoken.isEmpty else { return }
-            question = spoken
-        }
-        .alert(
-            "Dictée",
-            isPresented: Binding(
-                get: { dictation.errorText != nil },
-                set: { if !$0 { dictation.dismissError() } }
-            )
-        ) {
-            Button("Fermer") { dictation.dismissError() }
-        } message: {
-            Text(dictation.errorText ?? "")
-        }
-        .sheet(isPresented: Binding(get: { recorder.isBusy },
-                                    set: { if !$0 { recorder.cancel() } })) {
-            RecordingSheet(recorder: recorder, onStop: finishRecording)
-                .presentationDetents([.height(300)])
-                .interactiveDismissDisabled(recorder.isTranscribing)
-        }
-        // Micro refusé, session audio indisponible, transcription échouée : ces trois échecs
-        // laissent le panneau fermé, ou le referment en emportant leur message. Sans cette
-        // alerte, un appui long sur le micro ne produirait rien du tout à l'écran.
+        // Micro refusé, session audio indisponible, transcription échouée : sans cette alerte,
+        // une touche sur le micro ne produirait rien du tout à l'écran.
         .alert(
             "Enregistrement",
             isPresented: Binding(
-                get: { recorder.errorText != nil && !recorder.isBusy },
+                get: { recorder.errorText != nil },
                 set: { if !$0 { recorder.dismissError() } }
             )
         ) {
@@ -148,15 +123,30 @@ struct HomeView: View {
     /// Deux informations qui ne servent jamais en même temps, et une hauteur qui ne bouge pas.
     @ViewBuilder
     private var contextRow: some View {
-        if dictation.isListening {
+        if recorder.isRecording {
             HStack(spacing: 7) {
                 Circle()
                     .fill(Color.atelierAccent)
                     .frame(width: 7, height: 7)
-                Text("J'écoute — touchez le micro pour arrêter")
+                Text(recorder.limitReached
+                     ? "Limite d'une heure atteinte — touchez le micro pour transcrire"
+                     : "J'écoute — \(recorder.elapsedText) — touchez le micro pour arrêter")
+                    .monospacedDigit()
+                Button("Annuler") { recorder.cancel() }
+                    .font(.footnote)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
             }
             .font(.footnote)
             .foregroundStyle(Color.atelierAccent)
+            .transition(.opacity)
+        } else if recorder.isTranscribing {
+            HStack(spacing: 7) {
+                ProgressView().controlSize(.mini)
+                Text(recorder.stateText.isEmpty ? "Transcription…" : recorder.stateText)
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
             .transition(.opacity)
         } else {
             sourcePicker
@@ -186,13 +176,13 @@ struct HomeView: View {
     }
 
     /// Vrai dès que le micro travaille, d'une façon ou d'une autre.
-    private var micActive: Bool { dictation.isListening || recorder.isRecording }
+    private var micActive: Bool { recorder.isBusy }
 
     private var actions: some View {
         HStack(spacing: 12) {
-            // Volontairement pas un Button : un Button plus un appui long déclencherait les deux,
-            // et l'enregistrement s'arrêterait au relâchement du doigt. Les deux gestes posés
-            // séparément s'excluent proprement — l'appui long l'emporte s'il est tenu.
+            // Un seul geste, une seule fonction : une touche démarre la dictée, une seconde
+            // l'arrête. Il n'y a plus d'appui long à distinguer, donc plus de raison d'éviter
+            // un Button — et l'accessibilité y gagne.
             Image(systemName: micActive ? "stop.fill" : "mic.fill")
                 .font(.system(size: 20, weight: .medium))
                 .frame(width: 52, height: 52)
@@ -204,10 +194,9 @@ struct HomeView: View {
                 .foregroundStyle(micActive ? Color.white : Color.atelierAccent)
                 .contentShape(Circle())
                 .onTapGesture { micTapped() }
-                .onLongPressGesture(minimumDuration: 0.4) { startRecording() }
                 .accessibilityElement()
-                .accessibilityLabel(micActive ? "Arrêter" : "Dicter")
-                .accessibilityHint("Touchez pour dicter, maintenez pour enregistrer un mémo long")
+                .accessibilityLabel(micActive ? "Arrêter la dictée" : "Dicter")
+                .accessibilityHint("Touchez pour parler, touchez à nouveau pour transcrire")
                 .accessibilityAddTraits(.isButton)
 
             Button(action: launch) {
@@ -284,9 +273,6 @@ struct HomeView: View {
     // ── Actions ──────────────────────────────────────────────────────
 
     private func launch() {
-        // Lancer une recherche pendant que le micro tourne laisserait la dictée écrire
-        // par-dessus la question déjà partie.
-        dictation.stop()
         guard !trimmed.isEmpty, network.isOnline else { return }
         // Clé absente : plutôt qu'un message d'erreur, on ouvre directement la saisie.
         guard Keychain.has(.gemini) else {
@@ -299,21 +285,19 @@ struct HomeView: View {
         question = ""
     }
 
+    /// Un seul geste : une touche démarre la dictée, une seconde l'arrête et la fait
+    /// transcrire. Il n'y a plus deux fonctions à distinguer sur le même bouton.
     private func micTapped() {
         if recorder.isRecording {
             finishRecording()
-        } else if dictation.isListening {
-            dictation.stop()
-        } else {
-            // Le clavier gênerait : la dictée écrit toute seule dans le champ.
-            fieldFocused = false
-            dictation.start(startingFrom: trimmed)
+        } else if !recorder.isBusy {
+            startRecording()
         }
     }
 
     private func startRecording() {
-        guard !recorder.isRecording else { return }
-        dictation.stop()
+        guard !recorder.isBusy else { return }
+        // Le clavier n'a rien à faire là pendant qu'on parle.
         fieldFocused = false
         Task { await recorder.start() }
     }
@@ -328,7 +312,14 @@ struct HomeView: View {
                 storeName: store.settings.storeName
             )
             await recorder.transcribe(audio: audio, using: client, store: store) { text in
-                router.transcript = Router.TranscriptDraft(text: text, raw: text)
+                // Une question dictée revient droit dans le champ : c'est là qu'on la relit,
+                // et un écran de plus n'apporterait rien. Un mémo, lui, mérite le sien.
+                if text.count > 280 {
+                    router.transcript = Router.TranscriptDraft(text: text, raw: text)
+                } else {
+                    question = text
+                    fieldFocused = true
+                }
             }
         }
     }

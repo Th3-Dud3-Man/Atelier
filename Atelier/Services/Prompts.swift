@@ -219,9 +219,27 @@ enum Prompts {
 
     // ── Transcription ────────────────────────────────────────────────
 
+    /// Une dictée n'est pas un procès-verbal. On veut la phrase que la personne **voulait**
+    /// dire, pas le relevé de ses hésitations : c'est précisément ce qu'une reconnaissance
+    /// vocale ordinaire ne sait pas faire, et ce qu'un modèle de langue fait très bien.
+    /// La règle qui compte est la dernière : nettoyer n'autorise pas à réécrire.
     static let transcription = """
-    Transcris cet enregistrement en français, fidèlement, avec la ponctuation et les majuscules. \
-    Ne résume pas, ne reformule pas, n'ajoute rien, ne commente pas. Rends uniquement le texte \
-    transcrit. Si un passage est inaudible, écris [inaudible].
+    Transcris cet enregistrement en français, avec la ponctuation, les majuscules et les \
+    accents. Rends uniquement le texte, sans commentaire ni préambule.
+
+    Il s'agit d'une parole dictée, pas d'un procès-verbal. Rends-la telle qu'elle aurait été \
+    écrite :
+    1. Retire les hésitations et les tics de langue — « euh », « hum », « bah », « ben », \
+    « du coup » quand il ne veut rien dire, « voilà » en fin de phrase, « quoi » en fin de phrase.
+    2. Retire les bégaiements et les répétitions involontaires : « le le livre » devient \
+    « le livre », « je je voulais » devient « je voulais ».
+    3. Retire les faux départs : quand une phrase est abandonnée puis reprise autrement, ne \
+    garde que la version reprise.
+    4. Corrige la ponctuation et découpe en phrases lisibles. Si la personne dit « point », \
+    « virgule » ou « à la ligne », traite-le comme une consigne de ponctuation, pas comme un mot.
+
+    En revanche, ne reformule pas, ne résume pas, n'ajoute rien, ne corrige ni le style ni les \
+    idées, et ne change aucun mot porteur de sens. Un nom propre douteux se rend tel qu'entendu. \
+    Si un passage est inaudible, écris [inaudible].
     """
 }

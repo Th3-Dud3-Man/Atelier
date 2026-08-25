@@ -105,9 +105,11 @@ Les requêtes réellement envoyées à Perplexity s'affichent dans le résultat,
 
 **Si Internet n'est pas consulté, l'app le dit et explique pourquoi** — le plus souvent parce qu'aucune clé Perplexity n'est enregistrée. Sans elle, Gemini ne va pas sur le web à sa place : il n'en a pas les moyens, et la recherche se limite à vos fichiers.
 
-**Pour dicter**, touchez le **micro rond** sous le champ. Le texte s'écrit au fil de votre parole, directement dans la question. Touchez-le à nouveau pour arrêter. La reconnaissance se fait **sur l'appareil** : votre voix ne part nulle part, et cela ne coûte rien. Le clavier reste fermé pendant ce temps.
+**Pour dicter**, touchez le **micro rond** sous le champ, parlez, touchez-le à nouveau. Le clavier reste fermé, la ligne sous le champ affiche le chronomètre, et le texte arrive quelques secondes plus tard dans la question.
 
-**Pour un mémo long**, maintenez ce même micro. L'app enregistre jusqu'à une heure, puis Gemini transcrit — meilleur sur la ponctuation et les noms propres, pour quelques centièmes de centime la minute. Vous relisez avant que cela devienne une question.
+C'est **Gemini** qui transcrit, et c'est délibéré. Une reconnaissance vocale ordinaire écrit ce qu'elle entend : « euh », « du coup », « le le livre », les phrases abandonnées en cours de route. Gemini rend la phrase que vous vouliez dire — hésitations, bégaiements et faux départs retirés, ponctuation posée — sans reformuler ni changer un mot porteur de sens. Cela coûte environ six centièmes de centime la minute.
+
+L'enregistrement va jusqu'à une heure. Une dictée courte revient directement dans le champ ; un texte long passe par un écran de relecture avant de devenir une question.
 
 **Dans les résultats :**
 - Les petits numéros `[L1]`, `[W2]` sont touchables : ils font défiler jusqu'à la source correspondante.

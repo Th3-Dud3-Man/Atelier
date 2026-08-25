@@ -460,11 +460,11 @@ struct SettingsView: View {
             // Une autorisation absente du fichier de description ne se voit pas : iOS arrête
             // l'app au moment où elle la demande. Cette ligne la montre sans rien déclencher.
             LabeledContent("Autorisations déclarées") {
-                if let missing = LiveDictation.missingUsageDescription {
+                if let missing = VoiceRecorder.missingUsageDescription {
                     Text("manque \(missing)")
                         .foregroundStyle(.orange)
                 } else {
-                    Text("micro et dictée")
+                    Text("micro")
                         .foregroundStyle(.secondary)
                 }
             }
