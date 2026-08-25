@@ -30,3 +30,21 @@ enum Keychain {
     static func has(_ item: Item) -> Bool { false }
     static func masked(_ item: Item) -> String { "" }
 }
+
+/// Le cadre Compression n'existe que chez Apple. Ce substitut ne décompresse rien : il permet
+/// seulement au compilateur de relire le lecteur ZIP. Les pièces « rangées telles quelles »
+/// (méthode 0), elles, se lisent sans lui — c'est ce que couvrent les tests.
+#if !canImport(Compression)
+let COMPRESSION_ZLIB: Int32 = 0
+
+func compression_decode_buffer(
+    _ destination: UnsafeMutablePointer<UInt8>,
+    _ destinationSize: Int,
+    _ source: UnsafePointer<UInt8>,
+    _ sourceSize: Int,
+    _ scratch: UnsafeMutableRawPointer?,
+    _ algorithm: Int32
+) -> Int {
+    0
+}
+#endif

@@ -14,6 +14,8 @@ SKIP='^import (SwiftUI|UIKit|QuickLook|PDFKit|AVFoundation|Security|CryptoKit|Sp
 # Fichiers qui n'importent que Foundation mais s'appuient sur des API absentes hors Apple :
 #   SSEStream  → URLSession.bytes(for:)
 #   FolderSync → portée de sécurité, signets, NSFileCoordinator
+# DocumentText importe Compression, absent hors Apple : la ligne d'import est retirée des
+# copies et la fonction de décompression est remplacée par un substitut (voir linux-shims).
 EXCLUDE_PATHS='Atelier/Services/SSEStream.swift
 Atelier/Services/FolderSync.swift'
 FILES=$(grep -RL --include='*.swift' -E "$SKIP" Atelier | sort)
@@ -30,7 +32,9 @@ for f in $FILES; do
     echo '#if canImport(FoundationNetworking)'
     echo 'import FoundationNetworking'
     echo '#endif'
-    cat "$f"
+    # `import Compression` n'existe pas hors Apple : la ligne saute, et linux-shims fournit
+    # un substitut de `compression_decode_buffer`.
+    sed 's/^import Compression$//' "$f"
   } > "$TMP/$(echo "$f" | tr '/' '_')"
 done
 echo

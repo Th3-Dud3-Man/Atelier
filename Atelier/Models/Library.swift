@@ -80,14 +80,34 @@ struct FileEntry: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// Formats acceptés par Gemini File Search. Audio, vidéo et images restent au catalogue :
-/// la documentation indique explicitement que File Search ne les prend pas en charge.
+/// Ce que l'app sait envoyer au corpus, et comment.
+///
+/// Deux familles. Celle que **Gemini accepte telle quelle** — la liste des types MIME admis
+/// par File Search est publiée, et elle est plus étroite qu'il n'y paraît : `application/rtf`,
+/// `application/vnd.ms-powerpoint` ou `application/epub+zip` n'y figurent pas, et un fichier
+/// envoyé sous ces types est refusé sans autre explication qu'une erreur sur `mime_type`.
+/// Et celle que **l'app convertit sur l'appareil** avant de l'envoyer : le texte est extrait
+/// ici, puis transmis en `text/plain`.
+///
+/// Audio, vidéo et images restent au catalogue : la documentation indique explicitement que
+/// File Search ne les prend pas en charge, sous aucun type.
 enum SupportedTypes {
-    static let extensions: Set<String> = [
-        "pdf", "txt", "md", "markdown", "rtf", "html", "htm", "xml", "json", "csv", "tsv",
-        "doc", "docx", "odt", "ppt", "pptx", "xls", "xlsx", "odp", "ods", "epub",
-        "swift", "js", "ts", "py", "java", "c", "h", "cpp", "go", "rb", "sh", "css", "yaml", "yml",
+    /// Envoyés tels quels, sous un type MIME figurant dans la liste officielle.
+    static let native: Set<String> = [
+        "pdf", "txt", "text", "md", "markdown", "rtf", "html", "htm", "xml", "json",
+        "csv", "tsv", "doc", "docx", "dotx", "odt", "xls", "xlsx", "pptx",
+        "swift", "js", "mjs", "ts", "tsx", "jsx", "py", "java", "c", "h", "cpp", "cc", "hpp",
+        "go", "rb", "rs", "kt", "cs", "php", "pl", "lua", "r", "scala", "sql", "sh", "bash",
+        "zsh", "css", "scss", "sass", "yaml", "yml", "tex", "bib", "diff", "patch", "log",
+        "srt", "vtt", "ics", "vcf", "toml", "ini", "conf", "properties",
     ]
+
+    /// Refusés par Gemini, mais dont l'app sait tirer le texte avant de l'envoyer.
+    static let converted: Set<String> = [
+        "epub", "ods", "odp", "odg", "ppt", "pages", "numbers", "key", "pptm", "docm", "xlsm",
+    ]
+
+    static let extensions: Set<String> = native.union(converted)
 
     /// Limite documentée : 100 Mo par fichier.
     static let maxFileBytes: Int64 = 100 * 1024 * 1024
@@ -96,26 +116,48 @@ enum SupportedTypes {
         extensions.contains((name as NSString).pathExtension.lowercased())
     }
 
-    /// Type MIME envoyé à Gemini. Une valeur générique est acceptable : le service la déduit sinon.
+    /// Vrai si le texte doit être extrait sur l'appareil avant l'envoi.
+    static func needsConversion(_ name: String) -> Bool {
+        converted.contains((name as NSString).pathExtension.lowercased())
+    }
+
+    /// Type MIME envoyé à Gemini. **Chaque valeur ci-dessous figure dans la liste officielle
+    /// des types admis par File Search** : une valeur plausible mais absente de cette liste
+    /// fait rejeter le fichier. En cas de doute, `text/plain` passe toujours.
     static func mimeType(for name: String) -> String {
         switch (name as NSString).pathExtension.lowercased() {
         case "pdf": "application/pdf"
-        case "txt": "text/plain"
         case "md", "markdown": "text/markdown"
-        case "rtf": "application/rtf"
+        case "rtf": "text/rtf"
         case "html", "htm": "text/html"
         case "xml": "text/xml"
         case "json": "application/json"
         case "csv": "text/csv"
         case "tsv": "text/tab-separated-values"
         case "doc": "application/msword"
-        case "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        case "docx", "dotx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         case "odt": "application/vnd.oasis.opendocument.text"
-        case "ppt": "application/vnd.ms-powerpoint"
         case "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         case "xls": "application/vnd.ms-excel"
         case "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        case "epub": "application/epub+zip"
+        case "css": "text/css"
+        case "js", "mjs": "text/javascript"
+        case "py": "text/x-python"
+        case "swift": "text/x-swift"
+        case "java": "text/x-java"
+        case "c", "h": "text/x-c"
+        case "cpp", "cc", "hpp": "text/x-c++src"
+        case "go": "text/x-go"
+        case "rs": "text/x-rust"
+        case "rb": "text/x-ruby-script"
+        case "sh", "bash", "zsh": "text/x-sh"
+        case "sql": "text/x-sql"
+        case "tex": "text/x-tex"
+        case "yaml", "yml": "text/yaml"
+        case "vtt": "text/vtt"
+        case "ics": "text/calendar"
+        case "vcf": "text/vcard"
+        // Tout le reste part en texte simple : c'est le type le plus sûr de la liste.
         default: "text/plain"
         }
     }

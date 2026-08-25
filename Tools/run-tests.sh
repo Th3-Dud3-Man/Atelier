@@ -13,6 +13,11 @@ trap 'rm -rf "$TMP"' EXIT
 
 # AppData s'appuie sur Observation, qui n'apporte rien au test : on retire l'annotation.
 sed 's/^import Observation$//; s/^@Observable$//' Atelier/Models/AppData.swift > "$TMP/AppData.swift"
+# DocumentText importe Compression, absent hors Apple. La ligne saute et un substitut prend
+# le relais : seules les pièces « rangées telles quelles » se lisent alors, ce qui suffit à
+# éprouver la lecture de l'archive et le traitement du XML.
+sed 's/^import Compression$//' Atelier/Services/DocumentText.swift > "$TMP/DocumentText.swift"
+cp Tools/linux-shims-compression.swift "$TMP/shims.swift"
 
 STATUS=0
 for test in Tools/tests/*.swift; do
@@ -24,7 +29,8 @@ for test in Tools/tests/*.swift; do
       Atelier/Models/Domain.swift Atelier/Models/Library.swift \
       Atelier/Services/CostModel.swift Atelier/Services/GeminiModels.swift \
       Atelier/Services/Dedupe.swift \
-      "$TMP/AppData.swift" "$TMP/main.swift" -o "$TMP/$name" 2>"$TMP/$name.log"; then
+      "$TMP/AppData.swift" "$TMP/DocumentText.swift" "$TMP/shims.swift" \
+      "$TMP/main.swift" -o "$TMP/$name" 2>"$TMP/$name.log"; then
     "$TMP/$name" || STATUS=1
   else
     echo "  échec de compilation :"; sed 's/^/    /' "$TMP/$name.log" | head -20; STATUS=1

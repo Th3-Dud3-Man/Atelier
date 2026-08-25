@@ -191,6 +191,31 @@ groundingMetadata.groundingSupports[] = {
 Il n'existe **pas** de champ `page_span` : le numéro de page est `pageNumber`, et c'est tout. ✅
 En streaming, `groundingChunks` ne contient que les passages pas encore envoyés, et les indices portent sur l'accumulation de toutes les réponses — il faut cumuler côté client. ✅
 
+### 2.4 bis Types MIME : une liste fermée, plus étroite qu'il n'y paraît
+
+**Relevé sur le terrain, 26/08/2026 :** l'envoi échoue avec une erreur sur
+`UploadToFileSearchRequest.mime_type` dès que le type proposé ne figure pas dans la liste
+officielle. Plusieurs valeurs pourtant naturelles en sont absentes : ✅
+
+| Extension | Type intuitif — **refusé** | Ce qu'il faut faire |
+|---|---|---|
+| `.rtf` | `application/rtf` | employer `text/rtf`, qui est dans la liste |
+| `.ppt` | `application/vnd.ms-powerpoint` | absent : convertir en texte sur l'appareil |
+| `.epub` | `application/epub+zip` | absent : convertir |
+| `.ods` | `application/vnd.oasis.opendocument.spreadsheet` | absent : convertir |
+| `.odp` | `application/vnd.oasis.opendocument.presentation` | absent : convertir |
+
+Sont bien admis : `application/pdf`, `application/msword`, les trois types OOXML
+(`…wordprocessingml.document`, `…spreadsheetml.sheet`, `…presentationml.presentation`),
+`application/vnd.ms-excel`, `application/vnd.oasis.opendocument.text`, `application/json`,
+`application/xml`, `application/zip`, et une large famille `text/*` incluant `text/plain`,
+`text/markdown`, `text/html`, `text/csv`, `text/rtf`, `text/tab-separated-values`, ainsi que
+les types par langage (`text/x-python`, `text/x-swift`, `text/x-c`…). ✅
+
+Conséquence pour l'app : `text/plain` est le repli sûr, et tout refus portant sur le type
+déclenche une extraction locale du texte suivie d'un nouvel envoi. La liste évoluera ; ce
+repli, lui, n'a pas à être tenu à jour.
+
 ### 2.5 Limites
 
 | Limite | Valeur |
@@ -203,6 +228,7 @@ En streaming, `groundingChunks` ne contient que les passages pas encore envoyés
 | Taille conseillée d'un store | < 20 Go pour garder la latence basse ✅ |
 | Pagination | 20 éléments par page maximum ✅ |
 | Audio et vidéo | **non pris en charge par File Search** ✅ |
+| Types MIME admis | **liste fermée et publiée** — voir ci-dessous ✅ |
 | Durée de vie des embeddings | aucune ; ils persistent jusqu'à suppression ✅ |
 
 ---

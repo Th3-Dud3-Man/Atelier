@@ -308,6 +308,20 @@ final class FolderSync: FileIndexing {
         return indexed
     }
 
+    /// Vrai quand l'erreur porte sur le type du fichier plutôt que sur son contenu.
+    private static func isMimeRejection(_ error: APIError) -> Bool {
+        guard error.status == 400 else { return false }
+        let message = error.message.lowercased()
+        return message.contains("mime") || message.contains("unsupported")
+            || message.contains("not supported")
+    }
+
+    /// L'extraction lit et décompresse : c'est du travail, et il n'a rien à faire sur le fil
+    /// qui dessine l'écran.
+    private static func extractText(from data: Data, name: String) async -> String? {
+        try? await offMainActor { DocumentText.extract(from: data, name: name) }
+    }
+
     /// Fait de la place dans le corpus pour un fichier demandé à la volée.
     ///
     /// Sur un corpus plus gros que le budget, le catalogue est complet mais l'index est un
@@ -364,12 +378,46 @@ final class FolderSync: FileIndexing {
                 try? await gemini.deleteDocument(named: previous)
             }
 
-            let documentName = try await gemini.uploadDocument(
-                data: data,
-                displayName: entry.name,
-                mimeType: SupportedTypes.mimeType(for: entry.name),
-                relativePath: entry.relativePath
-            )
+            // Ce que Gemini refuse est converti ici, sur l'appareil : l'archive est ouverte,
+            // le texte en est tiré, et c'est lui qui part — en texte simple.
+            var payload = data
+            var mime = SupportedTypes.mimeType(for: entry.name)
+            if SupportedTypes.needsConversion(entry.name) {
+                guard let converted = await Self.extractText(from: data, name: entry.name) else {
+                    var failed = entry
+                    failed.size = realSize
+                    failed.status = .unsupported
+                    failed.errorMessage = "Le texte n'a pas pu être extrait de ce fichier. "
+                        + "Réenregistrez-le en PDF ou en .docx pour qu'il entre dans le corpus."
+                    store.upsert(failed)
+                    return false
+                }
+                payload = Data(converted.utf8)
+                mime = "text/plain"
+            }
+
+            let documentName: String
+            do {
+                documentName = try await gemini.uploadDocument(
+                    data: payload,
+                    displayName: entry.name,
+                    mimeType: mime,
+                    relativePath: entry.relativePath
+                )
+            } catch let error as APIError where Self.isMimeRejection(error) && mime != "text/plain" {
+                // Google a refusé le type. Plutôt que de laisser le fichier de côté, on tente
+                // de l'ouvrir ici et de n'envoyer que son texte. La liste des types admis
+                // évolue ; ce repli, lui, n'a pas à être tenu à jour.
+                guard let converted = await Self.extractText(from: data, name: entry.name) else {
+                    throw error
+                }
+                documentName = try await gemini.uploadDocument(
+                    data: Data(converted.utf8),
+                    displayName: entry.name,
+                    mimeType: "text/plain",
+                    relativePath: entry.relativePath
+                )
+            }
 
             var updated = entry
             updated.size = realSize

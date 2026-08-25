@@ -64,7 +64,13 @@ L'indexation démarre immédiatement, en arrière-plan. Vous pouvez chercher pen
 
 **Ce qui se passe ensuite, tout seul :** à chaque ouverture de l'app et à chaque retour à l'écran, elle relit le dossier et repère ce qui a changé. Un document ajouté depuis n'importe quel appareil devient donc cherchable à la prochaine ouverture. Un document supprimé disparaît des résultats. Un document modifié est réindexé sans créer de doublon.
 
-**Formats pris en charge :** PDF, Word, texte, Markdown, RTF, HTML, tableurs, présentations, ePub, fichiers de code. Les images, l'audio et la vidéo ne peuvent pas être indexés par Gemini : ils restent connus par leur nom, dans le catalogue, mais leur contenu n'est jamais envoyé.
+**Formats pris en charge.** Trois cas, et l'app choisit seule :
+
+- **Envoyés tels quels** — PDF, Word (.doc, .docx), Excel (.xls, .xlsx), PowerPoint (.pptx), OpenDocument texte (.odt), texte, Markdown, RTF, HTML, XML, JSON, CSV, et les fichiers de code.
+- **Convertis sur l'appareil, puis envoyés en texte** — ePub, tableurs et présentations OpenDocument (.ods, .odp), PowerPoint d'avant 2007 (.ppt), Pages, Numbers, Keynote. Ces formats-là, Gemini les refuse ; l'app ouvre l'archive, en tire le texte, et n'envoie que lui. Rien de plus ne sort de l'appareil.
+- **Catalogués seulement** — images, audio, vidéo (.mp3, .mpga, .rm, .mp4…), archives, et tout format dont le texte ne peut être extrait. Ils restent connus par leur nom, leur dossier et leur date, ils sont cherchables ainsi dans **Mes fichiers**, et leur contenu n'est jamais envoyé nulle part. La documentation de Gemini exclut explicitement l'audio et la vidéo de File Search.
+
+Si un fichier échoue malgré tout, l'app le marque en rouge dans **Mes fichiers** avec la raison. Un `.doc` très ancien ou un PDF entièrement scanné sont les deux cas les plus courants : réenregistrez-les en `.docx` ou en PDF avec texte.
 
 **Deux limites de Gemini à connaître :** un fichier ne doit pas dépasser 100 Mo, et l'espace occupé chez Google vaut environ trois fois la taille de vos documents. L'écran **Mes fichiers** vous montre où vous en êtes.
 
