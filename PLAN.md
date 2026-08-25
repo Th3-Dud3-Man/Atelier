@@ -28,7 +28,7 @@
 | 6 | Réglages complets, diagnostics, README, checklist appareil | écrit |
 | 7 | **Compilation, installation, essais sur vos appareils** | **vous attend** |
 
-« Écrit » signifie : rédigé, relu, et passé au compilateur Swift 6 pour les 12 fichiers sur 25 qui
+« Écrit » signifie : rédigé, relu, et passé au compilateur Swift 6 pour les 12 fichiers sur 31 qui
 ne dépendent pas des cadres Apple. Cela ne veut pas dire « compilé » : voir ci-dessous.
 
 ## Ce que je ne peux pas vérifier depuis ici

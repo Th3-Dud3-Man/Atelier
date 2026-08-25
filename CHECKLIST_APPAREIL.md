@@ -1,6 +1,6 @@
 # Ce que vous devez vérifier vous-même
 
-Je n'ai ni Mac, ni Xcode, ni vos appareils, ni vos clés : cette session tourne dans un conteneur Linux. Le code a été relu par un compilateur Swift 6 pour tout ce qui ne dépend pas des cadres Apple (12 fichiers sur 25), mais **rien n'a été compilé ni exécuté**. Cette liste est donc le vrai passage de la théorie au fonctionnement.
+Je n'ai ni Mac, ni Xcode, ni vos appareils, ni vos clés : cette session tourne dans un conteneur Linux. Le code a été relu par un compilateur Swift 6 pour tout ce qui ne dépend pas des cadres Apple (12 fichiers sur 31), et une revue critique automatisée a passé le reste au crible — mais **rien n'a été compilé ni exécuté**. Cette liste est donc le vrai passage de la théorie au fonctionnement.
 
 Suivez-la dans l'ordre. À chaque étape : ce qu'il faut voir, et quoi faire sinon. Copiez-moi tout message d'erreur, même long, même illisible — c'est exactement ce dont j'ai besoin.
 
