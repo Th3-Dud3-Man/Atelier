@@ -5,7 +5,6 @@ import SwiftUI
 struct RootView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(SearchEngine.self) private var engine
-    @Environment(AppStore.self) private var store
     @State private var router = Router()
     @State private var sidebar = NavigationSplitViewVisibility.automatic
 
@@ -78,7 +77,7 @@ struct RootView: View {
         // Des boutons de taille nulle : invisibles à l'écran, actifs au clavier.
         ZStack {
             Button("Nouvelle recherche") {
-                engine.cancel()
+                engine.reset()
                 router.backToHome()
                 router.requestFocus()
             }

@@ -58,6 +58,19 @@ struct ResultsView: View {
         .navigationTitle("Résultat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // Sur iPad, le détail n'a pas de bouton retour : sans ceci, et sans clavier,
+            // on resterait bloqué sur le dernier résultat.
+            if sizeClass == .regular {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        engine.reset()
+                        router.backToHome()
+                        router.requestFocus()
+                    } label: {
+                        Label("Nouvelle recherche", systemImage: "square.and.pencil")
+                    }
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 if let record, !record.synthesis.isEmpty {
                     ShareLink(item: shareText(record)) {

@@ -123,6 +123,19 @@ final class SearchEngine {
         }
     }
 
+    /// Repart de zéro : sur iPad, l'accueil ne réapparaît que si plus aucune recherche n'est en cours.
+    func reset() {
+        cancel()
+        record = nil
+        phase = .idle
+        statusText = ""
+        errorText = nil
+        clarification = nil
+        duplicatePrompt = nil
+        pendingFollowUp = nil
+        pendingRun = nil
+    }
+
     /// Rejoue la recherche en cours, à l'identique.
     func retry() {
         guard let current = record else { return }

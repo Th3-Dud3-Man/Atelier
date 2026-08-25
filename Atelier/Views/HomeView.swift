@@ -44,9 +44,13 @@ struct HomeView: View {
 
                 if let status = statusMessage {
                     Button {
-                        router.showingFiles = true
+                        switch status.destination {
+                        case .files: router.showingFiles = true
+                        case .settings: router.showingSettings = true
+                        case .none: break
+                        }
                     } label: {
-                        Text(status)
+                        Text(status.text)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 14)
@@ -183,24 +187,37 @@ struct HomeView: View {
 
     // ── Pastille d'état : une seule à la fois ────────────────────────
 
-    private var statusMessage: String? {
+    /// Une seule pastille à la fois, et elle mène là où l'on peut agir.
+    private struct StatusPill {
+        enum Destination { case files, settings, none }
+        var text: String
+        var destination: Destination
+    }
+
+    private var statusMessage: StatusPill? {
         if !network.isOnline {
-            return store.indexedFiles.isEmpty
-                ? "Hors ligne — la recherche reprendra au retour du réseau"
-                : "Hors ligne — la recherche a besoin du réseau, l'historique reste consultable"
-        }
-        if let progress = sync.progressText { return progress }
-        if store.capReached {
-            return "Plafond du mois atteint (\(CostModel.format(store.settings.monthlyCapUSD)))"
-        }
-        if store.folders.isEmpty {
-            return "Choisir un dossier iCloud à indexer"
-        }
-        if store.indexedFiles.isEmpty {
-            return "Aucun fichier indexé pour l'instant"
+            return StatusPill(
+                text: "Hors ligne — l'historique reste consultable",
+                destination: .none
+            )
         }
         if Keychain.get(.gemini).isEmpty {
-            return "Ajouter votre clé Gemini dans les réglages"
+            return StatusPill(text: "Ajouter votre clé Gemini dans les réglages", destination: .settings)
+        }
+        if store.capReached {
+            return StatusPill(
+                text: "Plafond du mois atteint (\(CostModel.format(store.settings.monthlyCapUSD)))",
+                destination: .settings
+            )
+        }
+        if let progress = sync.progressText {
+            return StatusPill(text: progress, destination: .files)
+        }
+        if store.folders.isEmpty {
+            return StatusPill(text: "Choisir un dossier iCloud à indexer", destination: .files)
+        }
+        if store.indexedFiles.isEmpty {
+            return StatusPill(text: "Aucun fichier indexé pour l'instant", destination: .files)
         }
         return nil
     }
