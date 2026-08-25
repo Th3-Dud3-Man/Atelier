@@ -485,11 +485,11 @@ struct GeminiClient: Sendable {
         let operation = try JSONDecoder().decode(Operation.self, from: operationData)
         let finished = try await waitForOperation(operation)
 
-        if let name = finished.response?["name"]?.stringValue, !name.isEmpty {
-            return name
-        }
-        // Le nom du document n'est pas toujours renvoyé : on le retrouve par son nom affiché.
-        return try await findDocument(displayName: displayName) ?? ""
+        // Le nom du document n'est pas toujours présent dans la réponse de l'opération.
+        // On ne va PAS le chercher ici : cela demanderait de lister tout le corpus, page de vingt
+        // par page de vingt, pour chaque fichier envoyé. L'appelant réconcilie en une seule fois
+        // à la fin du lot (voir FolderSync.reconcileDocumentNames).
+        return finished.response?["name"]?.stringValue ?? ""
     }
 
     private func waitForOperation(_ operation: Operation, maxWait: TimeInterval = 900) async throws -> Operation {
@@ -515,8 +515,14 @@ struct GeminiClient: Sendable {
         return current
     }
 
-    func findDocument(displayName: String) async throws -> String? {
-        try await listDocuments().first { $0.displayName == displayName }?.name
+    /// Table « nom affiché → nom de document », obtenue en une seule traversée du corpus.
+    func documentNamesByDisplayName() async throws -> [String: String] {
+        var table: [String: String] = [:]
+        for document in try await listDocuments() {
+            guard let display = document.displayName, let name = document.name else { continue }
+            table[display] = name
+        }
+        return table
     }
 
     // ── Recherche dans le corpus ─────────────────────────────────────

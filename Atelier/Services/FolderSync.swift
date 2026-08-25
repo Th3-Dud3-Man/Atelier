@@ -223,7 +223,30 @@ final class FolderSync: FileIndexing {
             progressText = "Indexation \(done) / \(pending.count) — \(entry.name)"
             await index(entry)
         }
+        await reconcileDocumentNames()
         progressText = nil
+    }
+
+    /// Google ne renvoie pas toujours le nom du document créé. Plutôt que de lister le corpus
+    /// entier pour chaque fichier envoyé, on le fait **une fois** à la fin du lot, et seulement
+    /// s'il reste des noms manquants. Sans ce nom, une réindexation ultérieure laisserait deux
+    /// exemplaires du même texte dans le corpus.
+    private func reconcileDocumentNames() async {
+        let orphans = store.files.filter { $0.status == .indexed && ($0.storeDocumentName ?? "").isEmpty }
+        guard !orphans.isEmpty, !store.settings.storeName.isEmpty else { return }
+
+        progressText = "Vérification du corpus…"
+        guard let table = try? await gemini.documentNamesByDisplayName() else { return }
+
+        let repaired = orphans.compactMap { entry -> FileEntry? in
+            guard let name = table[entry.name] else { return nil }
+            var copy = entry
+            copy.storeDocumentName = name
+            return copy
+        }
+        if !repaired.isEmpty {
+            store.upsertFiles(repaired)
+        }
     }
 
     /// Niveau 3 du Smart Search : indexer un fichier précis, à la demande du moteur de recherche.
@@ -233,7 +256,11 @@ final class FolderSync: FileIndexing {
               entry.size <= SupportedTypes.maxFileBytes
         else { return false }
         guard await ensureStore() else { return false }
-        return await index(entry)
+        let indexed = await index(entry)
+        if indexed, (store.file(id: fileID)?.storeDocumentName ?? "").isEmpty {
+            await reconcileDocumentNames()
+        }
+        return indexed
     }
 
     @discardableResult
