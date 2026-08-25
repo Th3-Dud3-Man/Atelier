@@ -20,11 +20,18 @@ struct FilesView: View {
         filter(store.catalogedFiles).sorted { $0.modified > $1.modified }
     }
 
+    /// Recherche locale, instantanée et gratuite : elle ne consulte personne, ne facture rien
+    /// et porte sur le nom comme sur le chemin. Insensible aux accents et à la casse, et
+    /// plusieurs mots se cumulent — « impots 2024 » trouve « Impôts/2024/avis.pdf ».
     private func filter(_ files: [FileEntry]) -> [FileEntry] {
-        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !needle.isEmpty else { return files }
-        return files.filter {
-            $0.name.lowercased().contains(needle) || $0.relativePath.lowercased().contains(needle)
+        let words = Dedupe.foldedPath(query)
+            .split(separator: " ")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+        guard !words.isEmpty else { return files }
+        return files.filter { file in
+            let haystack = Dedupe.foldedPath(file.relativePath)
+            return words.allSatisfy { haystack.contains($0) }
         }
     }
 
@@ -42,7 +49,7 @@ struct FilesView: View {
                 limitsSection
             }
             .listStyle(.insetGrouped)
-            .searchable(text: $query, prompt: "Rechercher un fichier par nom")
+            .searchable(text: $query, prompt: "Rechercher un fichier par son nom")
             .navigationTitle("Mes fichiers")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

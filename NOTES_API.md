@@ -312,6 +312,22 @@ Non facturés : les requêtes invalides, celles limitées en débit, et les éch
 
 ---
 
+
+### Facturation Perplexity
+
+L'API Perplexity fonctionne par **crédits prépayés**, achetés d'avance et consommés par les
+appels — ce n'est pas un abonnement mensuel. La documentation le dit : les crédits sont
+« purchased in advance and used for API calls », et « automatic top-up can be enabled to
+avoid service interruptions », le rechargement se déclenchant sous un seuil que l'on fixe.
+Cette option est **désactivée par défaut**. ✅
+
+Conséquence pour l'app : Perplexity est le seul des services employés qui puisse s'arrêter
+net faute de crédit, sans que rien ne le laisse prévoir. L'erreur remontée par l'API doit
+donc rester lisible telle quelle dans l'écran de résultats, et `ACHATS_ET_CLES.md` insiste
+sur le rechargement automatique.
+
+À ne pas confondre avec l'abonnement grand public Perplexity Pro, qui est un autre produit.
+
 ## 5. Audio : quel format enregistrer
 
 **Lu le 25/08/2026** sur les pages Audio et Files API.

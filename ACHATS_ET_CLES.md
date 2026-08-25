@@ -17,7 +17,7 @@ qu'à Apple — signer l'app et la déposer sur TestFlight.
 |---|---|---|---|
 | Compte Apple Developer | developer.apple.com | 99 € / an | oui, vous l'avez déjà |
 | Crédit API Google (Gemini) | aistudio.google.com | à l'usage, quelques euros / mois | **oui** |
-| Crédit API Perplexity | perplexity.ai/settings/api | à l'usage, ~0,006 € la recherche | seulement pour Internet |
+| Crédit API Perplexity | perplexity.ai/settings/api | crédits prépayés, ~0,006 € la recherche | seulement pour Internet |
 | iCloud | Réglages de l'iPhone | 0,99 € à 2,99 € / mois | oui, pour le dossier surveillé |
 | GitHub Actions | github.com | gratuit sur un dépôt public, 2 000 min/mois sur un privé | oui |
 
@@ -51,6 +51,11 @@ C'est elle qui lit vos fichiers et rédige les réponses.
    Cloud → **Billing** → **Budgets & alerts** → **Create budget** → 25 € par mois, avec
    alerte par courriel à 50 %, 90 % et 100 %. Ceinture et bretelles.
 
+**Renouvellement :** il n'y a rien à renouveler. Google facture à l'usage et prélève sur
+la carte chaque mois, comme une facture d'électricité. Vous ne payez que ce qui a été
+consommé, et le service ne s'interrompt jamais faute de crédit. Un mois sans question
+ne coûte rien.
+
 **Où la coller :** dans l'app, sur l'iPhone. Écran d'accueil → icône horloge (en haut à
 gauche) → engrenage (en haut à droite) → champ **Gemini**. Nulle part ailleurs.
 
@@ -64,10 +69,38 @@ le dit clairement.
 1. Allez sur **perplexity.ai**, connectez-vous.
 2. **Settings** → **API** (ou directement perplexity.ai/settings/api).
 3. Section **API Keys** → **Generate**. Copiez la clé, elle commence par `pplx-…`.
-4. Perplexity fonctionne avec des crédits prépayés : ajoutez-en 10 $ dans la section
-   **Billing**. À 0,006 € la recherche, cela dure très longtemps.
+4. Perplexity fonctionne **par crédits prépayés, et non par abonnement mensuel**. Ce n'est
+   pas 10 € par mois : vous achetez une réserve, elle se consomme à mesure des recherches,
+   et un mois sans recherche ne coûte rien. Section **Billing** → **Buy more credits** →
+   10 $ suffisent amplement : à 0,006 € la recherche, cela représente plus de mille cinq
+   cents recherches.
+5. **Pour que cela ne s'arrête jamais**, activez le rechargement automatique : sur la page
+   **Billing**, à côté d'**Auto reload**, cliquez **Change preferences** et fixez le seuil
+   (par exemple : recharger 10 $ dès que le solde passe sous 3 $). Cette option est
+   **désactivée par défaut** — sans elle, la recherche Internet s'arrêtera net le jour où
+   la réserve s'épuise, et l'app vous dira simplement que la clé n'a plus de crédit.
+6. Vérifiez au passage le **plafond de dépense mensuel** proposé sur la même page, et
+   abaissez-le à une dizaine de dollars : votre budget de 30 € n'a aucune raison d'être
+   dépassé côté Perplexity.
+
+À ne pas confondre avec l'abonnement **Perplexity Pro** (~20 €/mois) : c'est un produit
+différent, pour le site et l'application grand public. L'app n'en a pas besoin.
 
 **Où la coller :** même écran de réglages, champ **Perplexity**.
+
+---
+
+## Les renouvellements, en un coup d'œil
+
+| | Comment cela se renouvelle | Ce que vous avez à faire |
+|---|---|---|
+| iCloud | abonnement mensuel automatique | rien |
+| Apple Developer | abonnement annuel automatique | rien |
+| Gemini | facturé à l'usage, prélevé chaque mois | rien |
+| Perplexity | **crédits prépayés qui s'épuisent** | activer le rechargement automatique (étape 2) |
+
+Perplexity est le seul des quatre à pouvoir s'arrêter tout seul. C'est pour cela que
+l'étape 2 insiste sur le rechargement automatique.
 
 ---
 
