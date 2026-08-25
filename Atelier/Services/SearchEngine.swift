@@ -125,6 +125,10 @@ final class SearchEngine {
 
         cancel()
         clearTransientState()
+        // cancel() a pu laisser « Recherche arrêtée. » à l'écran : on repart propre, sinon ce
+        // message s'affiche brièvement au lancement de la recherche suivante.
+        phase = .idle
+        statusText = ""
 
         var fresh = SearchRecord(question: trimmed)
         fresh.rawTranscript = rawTranscript

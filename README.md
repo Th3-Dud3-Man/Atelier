@@ -175,3 +175,4 @@ Un usage quotidien nourri reste très en dessous des 20 $ par mois. Les tarifs s
 | `Tools/typecheck.sh` | Relit le code hors Xcode (ne remplace pas une compilation) |
 | `Tools/make-icon.sh` | Régénère l'icône de l'app |
 | `PLAN.md` | Le plan de construction et son état |
+| `docs/CAHIER_DES_CHARGES.md` | Le cahier des charges consolidé, pour qu'une session de travail future n'ait pas besoin de la conversation d'origine |
