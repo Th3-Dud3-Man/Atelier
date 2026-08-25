@@ -457,6 +457,17 @@ struct SettingsView: View {
                 Text(store.settings.storeName.isEmpty ? "non créé" : "créé")
                     .foregroundStyle(.secondary)
             }
+            // Une autorisation absente du fichier de description ne se voit pas : iOS arrête
+            // l'app au moment où elle la demande. Cette ligne la montre sans rien déclencher.
+            LabeledContent("Autorisations déclarées") {
+                if let missing = LiveDictation.missingUsageDescription {
+                    Text("manque \(missing)")
+                        .foregroundStyle(.orange)
+                } else {
+                    Text("micro et dictée")
+                        .foregroundStyle(.secondary)
+                }
+            }
             LabeledContent("Grille de prix") {
                 Text("relevée le \(store.settings.prices.updatedOn)")
                     .foregroundStyle(.secondary)

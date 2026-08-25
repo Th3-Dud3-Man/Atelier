@@ -157,6 +157,19 @@ Vérifiez aussi que **Relancer** relance vraiment (le coût affiché doit augmen
 
 ---
 
+## Si l'app s'arrête brutalement
+
+Un arrêt brutal laisse une trace sur l'appareil, et cette trace nomme la cause exacte.
+C'est de loin le document le plus utile à me transmettre :
+
+**Réglages** › **Confidentialité et sécurité** › **Analyse et améliorations** ›
+**Données d'analyse**. Cherchez une ligne commençant par `Atelier-` suivie de la date.
+Touchez-la, puis le bouton de partage en haut à droite pour me l'envoyer — ou copiez-moi
+seulement les vingt premières lignes, celles qui portent `Exception Type`,
+`Termination Reason` et le nom de la méthode en cause.
+
+---
+
 ## Étape 7 — La voix
 
 **La dictée en direct.** Sur l'accueil, touchez le **micro rond** (une touche brève, sans

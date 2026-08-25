@@ -34,7 +34,11 @@ final class LiveDictation {
         func append(_ buffer: AVAudioPCMBuffer) { request.append(buffer) }
     }
 
-    private let engine = AVAudioEngine()
+    /// Un moteur neuf à chaque écoute. Un moteur conservé garde en mémoire le format du
+    /// matériel tel qu'il était la première fois ; si la session audio a changé entre-temps
+    /// — un casque branché, un appel reçu, le mémo long passé par là — poser une écoute
+    /// dessus ne renvoie pas une erreur : cela arrête l'app net.
+    private var engine: AVAudioEngine?
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var recognizer: SFSpeechRecognizer?
@@ -62,7 +66,29 @@ final class LiveDictation {
     /// mais on ne veut pas effacer ce qui était écrit.
     private var prefix = ""
 
+    /// Quand la raison d'usage manque du fichier de description, iOS ne refuse pas l'accès :
+    /// il **arrête l'app**. On vérifie donc avant de demander quoi que ce soit, pour dire ce
+    /// qui manque au lieu de disparaître.
+    static var missingUsageDescription: String? {
+        let required = [
+            "NSMicrophoneUsageDescription": "le micro",
+            "NSSpeechRecognitionUsageDescription": "la reconnaissance vocale",
+        ]
+        let missing = required.compactMap { key, label -> String? in
+            let value = Bundle.main.object(forInfoDictionaryKey: key) as? String
+            return (value?.isEmpty ?? true) ? label : nil
+        }
+        return missing.isEmpty ? nil : missing.sorted().joined(separator: " et ")
+    }
+
     private func begin() {
+        if let missing = Self.missingUsageDescription {
+            errorText = "Cette version de l'app ne déclare pas d'autorisation pour \(missing) : "
+                + "iOS refuse donc l'accès. Signalez-le-moi, c'est une ligne à corriger dans "
+                + "le projet."
+            return
+        }
+
         // Le français d'abord, la langue du système ensuite : un appareil réglé autrement
         // n'a pas à se voir imposer une reconnaissance française.
         let locale = Locale.current.language.languageCode?.identifier == "fr"
@@ -87,25 +113,38 @@ final class LiveDictation {
         request.addsPunctuation = true
         self.request = request
 
+        let session = AVAudioSession.sharedInstance()
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+            // Options volontairement absentes : chaque drapeau est une occasion de se voir
+            // refuser la catégorie sur un appareil ou dans un état particulier.
+            try session.setCategory(.record, mode: .measurement)
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             errorText = "Le micro n'a pas pu être activé : \(error.localizedDescription)"
+            request.endAudio()
+            self.request = nil
+            return
+        }
+        guard session.isInputAvailable else {
+            errorText = "Aucune entrée audio n'est disponible. Débranchez un accessoire, ou "
+                + "réessayez dans un instant."
+            cleanUp()
             return
         }
 
-        let sink = BufferSink(request)
+        // Le format se lit **après** l'activation de la session : avant, il vaut souvent zéro,
+        // et poser une écoute sur un format nul arrête l'app au lieu de renvoyer une erreur.
+        let engine = AVAudioEngine()
+        self.engine = engine
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
-        // Poser une écoute sur un format à zéro canal fait tomber l'app : cela arrive quand
-        // le micro est accaparé par un appel ou une autre app.
-        guard format.channelCount > 0 else {
+        guard format.channelCount > 0, format.sampleRate > 0 else {
             errorText = "Le micro est occupé par une autre application. Réessayez dans un instant."
             cleanUp()
             return
         }
+
+        let sink = BufferSink(request)
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
             sink.append(buffer)
@@ -179,8 +218,11 @@ final class LiveDictation {
     }
 
     private func cleanUp() {
-        engine.inputNode.removeTap(onBus: 0)
-        if engine.isRunning { engine.stop() }
+        if let engine {
+            engine.inputNode.removeTap(onBus: 0)
+            if engine.isRunning { engine.stop() }
+        }
+        engine = nil
         request = nil
         task = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
