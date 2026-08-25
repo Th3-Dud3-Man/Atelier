@@ -120,6 +120,15 @@ struct ResultsView: View {
                     duplicateCard(prompt)
                 }
 
+                if let warning = engine.budgetWarning {
+                    NoticeCard(
+                        title: "Budget du mois",
+                        message: warning,
+                        actionTitle: "Voir les réglages",
+                        action: { router.showingSettings = true }
+                    )
+                }
+
                 if let clarification = engine.clarification {
                     NoticeCard(
                         title: "Une précision serait utile",

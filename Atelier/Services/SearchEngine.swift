@@ -46,6 +46,8 @@ final class SearchEngine {
     /// Question de clarification quand la demande est réellement inintelligible.
     /// Ce n'est pas une erreur : elle s'affiche comme une question, pas comme un échec.
     private(set) var clarification: String?
+    /// Avertissement de budget, montré une seule fois quand 80 % du plafond est franchi.
+    private(set) var budgetWarning: String?
     private(set) var duplicatePrompt: DuplicatePrompt?
     /// Vrai pendant que la synthèse s'écrit, pour afficher le curseur.
     private(set) var isStreaming = false
@@ -92,6 +94,7 @@ final class SearchEngine {
         cancel()
         errorText = nil
         clarification = nil
+        budgetWarning = nil
         duplicatePrompt = nil
         pendingFollowUp = nil
         pendingRun = nil
@@ -131,6 +134,7 @@ final class SearchEngine {
         statusText = ""
         errorText = nil
         clarification = nil
+        budgetWarning = nil
         duplicatePrompt = nil
         pendingFollowUp = nil
         pendingRun = nil
@@ -598,6 +602,7 @@ final class SearchEngine {
         }
 
         isStreaming = false
+        budgetWarning = store.consumeBudgetWarning()
         if let reply = finalReply {
             recordCost(provider: "Gemini", model: reply.model, usage: reply.usage, note: "synthèse")
             if var current = record {

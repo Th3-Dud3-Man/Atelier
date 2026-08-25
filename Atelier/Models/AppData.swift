@@ -235,6 +235,21 @@ final class AppStore {
         return monthTotal() / cap
     }
 
+    /// Alerte à 80 % du plafond, une seule fois par mois. Renvoie le message à afficher,
+    /// et marque le mois comme signalé pour ne pas le répéter.
+    func consumeBudgetWarning() -> String? {
+        let cap = data.settings.monthlyCapUSD
+        guard cap > 0 else { return nil }
+        let month = CostEntry.monthKey(for: .now)
+        guard data.settings.alerted80Month != month else { return nil }
+        let total = monthTotal()
+        let ratio = total / cap
+        guard ratio >= 0.8, ratio < 1 else { return nil }
+        updateSettings { $0.alerted80Month = month }
+        return "Vous avez utilisé \(CostModel.format(total)) sur \(CostModel.format(cap)) ce mois-ci. "
+            + "Au plafond, les recherches payantes s'arrêteront."
+    }
+
     // ── Export / import ──────────────────────────────────────────────
 
     func exportData() throws -> Data {
