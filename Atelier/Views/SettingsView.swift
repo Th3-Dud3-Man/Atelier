@@ -46,6 +46,9 @@ struct SettingsView: View {
                 geminiKey = Keychain.get(.gemini)
                 perplexityKey = Keychain.get(.perplexity)
             }
+            // Une clé collée puis l'écran refermé sans toucher le bouton serait perdue :
+            // on enregistre aussi à la fermeture.
+            .onDisappear { saveKeys() }
             .fileExporter(
                 isPresented: $exporting,
                 document: JSONDocument(data: exportPayload),

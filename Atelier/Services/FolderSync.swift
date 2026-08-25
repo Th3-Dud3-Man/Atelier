@@ -22,8 +22,6 @@ final class FolderSync: FileIndexing {
     /// Texte de la pastille d'accueil, nil quand il n'y a rien à signaler.
     private(set) var progressText: String?
     private(set) var lastError: String?
-    /// Erreurs par fichier, montrées dans l'écran Mes fichiers.
-    private(set) var fileErrors: [String: String] = [:]
 
     private var task: Task<Void, Never>?
 
@@ -265,7 +263,6 @@ final class FolderSync: FileIndexing {
             updated.indexedSignature = entry.signature
             updated.errorMessage = nil
             store.upsert(updated)
-            fileErrors[entry.id] = nil
 
             store.record(CostEntry(
                 provider: "Gemini",
@@ -282,7 +279,6 @@ final class FolderSync: FileIndexing {
             updated.status = .failed
             updated.errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
             store.upsert(updated)
-            fileErrors[entry.id] = updated.errorMessage
             return false
         }
     }
