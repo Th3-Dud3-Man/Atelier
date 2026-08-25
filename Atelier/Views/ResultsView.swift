@@ -121,6 +121,15 @@ struct ResultsView: View {
                     duplicateCard(prompt)
                 }
 
+                if let notice = engine.sourceNotice {
+                    NoticeCard(
+                        title: "Une source n'a pas été consultée",
+                        message: notice,
+                        actionTitle: "Ouvrir les réglages",
+                        action: { router.showingSettings = true }
+                    )
+                }
+
                 if let warning = engine.budgetWarning {
                     NoticeCard(
                         title: "Budget du mois",

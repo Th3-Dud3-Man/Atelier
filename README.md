@@ -84,19 +84,30 @@ Concrètement : vos 10 Go sont tous cherchables, et vous ne payez l'indexation q
 
 ## 4. L'usage au quotidien
 
-Ouvrez l'app : le clavier est déjà là, le curseur dans le champ. Tapez, touchez **Rechercher**.
+Ouvrez l'app, touchez le champ, tapez, touchez **Rechercher**.
 
-**Le sélecteur sous le champ** décide où chercher :
+**La ligne sous le champ** décide où chercher — touchez-la pour ouvrir le menu :
 - **Auto** — l'app décide seule, d'après votre question. C'est le réglage normal.
 - **Mes fichiers** — vos documents seulement.
 - **Internet** — Perplexity seulement.
 - **Les deux** — une synthèse unique qui distingue les deux types de sources.
 
+### Qui fait quoi, exactement
+
+Une recherche Internet passe par quatre mains, dans cet ordre :
+
+1. **Gemini** lit votre question et la reformule en une à trois requêtes efficaces pour un moteur de recherche — dans la langue la plus pertinente pour le sujet, pas forcément la vôtre.
+2. **Perplexity** fait la recherche. C'est lui, et lui seul, qui va sur le web : il rend des pages, leurs titres, leurs extraits, leurs dates.
+3. **Gemini** rédige la synthèse à partir de ces extraits, avec l'interdiction d'ajouter quoi que ce soit qui n'y figure pas, et l'obligation de renvoyer à chaque source par son numéro.
+4. L'app affiche le tout, chaque affirmation reliée à sa carte source.
+
+Les requêtes réellement envoyées à Perplexity s'affichent dans le résultat, sous la question : « Perplexity a cherché : … ». C'est le moyen de vérifier que la reformulation a été bonne.
+
+**Si Internet n'est pas consulté, l'app le dit et explique pourquoi** — le plus souvent parce qu'aucune clé Perplexity n'est enregistrée. Sans elle, Gemini ne va pas sur le web à sa place : il n'en a pas les moyens, et la recherche se limite à vos fichiers.
+
 **Pour dicter**, touchez le **micro rond** sous le champ. Le texte s'écrit au fil de votre parole, directement dans la question. Touchez-le à nouveau pour arrêter. La reconnaissance se fait **sur l'appareil** : votre voix ne part nulle part, et cela ne coûte rien. Le clavier reste fermé pendant ce temps.
 
 **Pour un mémo long**, maintenez ce même micro. L'app enregistre jusqu'à une heure, puis Gemini transcrit — meilleur sur la ponctuation et les noms propres, pour quelques centièmes de centime la minute. Vous relisez avant que cela devienne une question.
-
-**Pour un mémo long**, maintenez le doigt sur le bouton micro rond de l'app. Un panneau s'ouvre avec un chronomètre. À la fin, l'enregistrement est transcrit par Gemini, et le texte s'affiche pour que vous le relisiez et le corrigiez **avant** qu'il devienne une question.
 
 **Dans les résultats :**
 - Les petits numéros `[L1]`, `[W2]` sont touchables : ils font défiler jusqu'à la source correspondante.

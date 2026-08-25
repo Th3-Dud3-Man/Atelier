@@ -53,6 +53,10 @@ final class SearchEngine {
     private(set) var clarification: String?
     /// Plafond atteint. État distinct d'une erreur : réessayer ne servirait à rien.
     private(set) var capBlocked: String?
+    /// Explication affichée quand une source demandée n'a pas pu être consultée : sans clé
+    /// Perplexity, ou sans corpus indexé. Le silence sur ce point donnait l'impression que
+    /// l'app ignorait la moitié du travail sans raison.
+    private(set) var sourceNotice: String?
     /// Avertissement de budget, montré une seule fois quand 80 % du plafond est franchi.
     private(set) var budgetWarning: String?
     private(set) var duplicatePrompt: DuplicatePrompt?
@@ -163,6 +167,7 @@ final class SearchEngine {
 
     private func clearTransientState() {
         errorText = nil
+        sourceNotice = nil
         clarification = nil
         capBlocked = nil
         budgetWarning = nil
@@ -402,6 +407,25 @@ final class SearchEngine {
         guard isCurrent(runID) else { return }
 
         let resolved = forced ?? resolveSource(requested: mode, analysis: analysis)
+
+        // Ce que l'on voulait faire, avant que le possible ne s'en mêle. Si les deux diffèrent,
+        // l'utilisateur a droit à la raison : une recherche qui se rabat en silence sur les
+        // fichiers passe pour une recherche qui ignore Internet.
+        let wanted = forced ?? (mode == .auto ? analysis.resolvedSource : mode)
+        if wanted != resolved {
+            let wantedWeb = wanted == .web || wanted == .both
+            let wantedFiles = wanted == .files || wanted == .both
+            if wantedWeb && !canSearch(.web) {
+                sourceNotice = "Internet n'a pas été consulté : aucune clé Perplexity n'est "
+                    + "enregistrée. C'est elle qui fait les recherches sur le web ; Gemini se "
+                    + "contente d'en reformuler la question et d'en rédiger la synthèse."
+            } else if wantedFiles && !canSearch(.files) {
+                sourceNotice = store.indexedFiles.isEmpty
+                    ? "Vos fichiers n'ont pas été consultés : aucun document n'est encore indexé."
+                    : "Vos fichiers n'ont pas été consultés : le corpus n'est pas encore créé."
+            }
+        }
+
         mutate(runID) { current in
             // En mode « Compléter », la source affichée reflète les deux moitiés.
             current.effectiveSource = keeping.isEmpty ? resolved : .both
@@ -637,12 +661,25 @@ final class SearchEngine {
         let level = store.settings.webLevel
         let prices = store.settings.prices
 
+        let queries = level == .deep
+            ? [question]
+            : (analysis.webQueries.isEmpty ? [question] : analysis.webQueries)
+
+        // Ce que Perplexity a réellement reçu, écrit noir sur blanc. C'est la moitié invisible
+        // de la recherche : sans cela, on ne peut ni vérifier que la question a été bien
+        // reformulée, ni même savoir que le web a été interrogé.
+        mutate(runID) { current in
+            current.notes.append(
+                "Perplexity a cherché : " + queries.map { "« \($0) »" }.joined(separator: ", ")
+            )
+        }
+
         let outcome: PerplexityClient.SearchOutcome
         if level == .deep {
             outcome = try await perplexity.deepSearch(question: question, prices: prices)
         } else {
             outcome = try await perplexity.search(
-                queries: analysis.webQueries.isEmpty ? [question] : analysis.webQueries,
+                queries: queries,
                 recency: analysis.isRecentInfo ? "month" : nil,
                 prices: prices
             )
