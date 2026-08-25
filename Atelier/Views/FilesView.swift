@@ -213,6 +213,8 @@ struct FilesView: View {
                 HStack {
                     fileRow(file, subtitle: catalogedSubtitle(file))
                     if file.status == .cataloged || file.status == .failed {
+                        // « trop volumineux » et « non pris en charge » n'offrent pas de bouton :
+                        // il n'y a rien à réessayer.
                         Spacer()
                         Button("Indexer") {
                             Task { _ = try? await sync.indexOnDemand(fileID: file.id) }
@@ -241,7 +243,7 @@ struct FilesView: View {
             Text(file.name).font(.body).lineLimit(2)
             Text(subtitle)
                 .font(.caption)
-                .foregroundStyle(file.status == .failed ? .red : .secondary)
+                .foregroundStyle(file.status.isProblem ? .red : .secondary)
                 .lineLimit(2)
         }
         .padding(.vertical, 1)

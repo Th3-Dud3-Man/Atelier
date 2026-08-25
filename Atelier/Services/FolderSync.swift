@@ -167,7 +167,7 @@ final class FolderSync: FileIndexing {
             entry.lastSeenAt = .now
 
             if file.size > SupportedTypes.maxFileBytes {
-                entry.status = .failed
+                entry.status = .tooLarge
                 entry.errorMessage = "Fichier trop volumineux : la limite de Gemini est de 100 Mo."
             } else if !SupportedTypes.isSupported(file.name) {
                 entry.status = .unsupported
@@ -278,7 +278,7 @@ final class FolderSync: FileIndexing {
             guard realSize <= SupportedTypes.maxFileBytes else {
                 var oversized = entry
                 oversized.size = realSize
-                oversized.status = .failed
+                oversized.status = .tooLarge
                 oversized.errorMessage = "Fichier trop volumineux : la limite de Gemini est de 100 Mo."
                 store.upsert(oversized)
                 return false

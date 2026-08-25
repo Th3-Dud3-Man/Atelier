@@ -5,7 +5,7 @@ import Foundation
 // non supporté (jamais envoyé, mais connu et cherchable par son nom).
 
 enum FileStatus: String, Codable, Sendable {
-    case indexed, cataloged, unsupported, failed, downloading
+    case indexed, cataloged, unsupported, failed, downloading, tooLarge
 
     var label: String {
         switch self {
@@ -14,8 +14,12 @@ enum FileStatus: String, Codable, Sendable {
         case .unsupported: "format non pris en charge"
         case .failed: "erreur"
         case .downloading: "téléchargement iCloud"
+        case .tooLarge: "trop volumineux"
         }
     }
+
+    /// Vaut-il la peine d'être signalé en rouge ?
+    var isProblem: Bool { self == .failed || self == .tooLarge }
 }
 
 /// Un dossier iCloud désigné par l'utilisateur, gardé entre deux lancements par un signet.
@@ -59,8 +63,11 @@ struct FileEntry: Codable, Identifiable, Hashable, Sendable {
         switch status {
         case .cataloged: true
         case .indexed: indexedSignature != signature
+        // Une erreur mérite un nouvel essai : c'est souvent un téléchargement iCloud inachevé.
         case .failed, .downloading: true
-        case .unsupported: false
+        // Ces deux-là ne changeront pas d'avis : les réessayer ne ferait que relire pour rien
+        // un fichier parfois très gros, à chaque scan.
+        case .unsupported, .tooLarge: false
         }
     }
 
