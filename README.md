@@ -173,6 +173,7 @@ Un usage quotidien nourri reste très en dessous des 20 $ par mois. Les tarifs s
 | `NOTES_API.md` | Les formats réels des API, relevés dans la documentation officielle, avec ce qui reste à confirmer |
 | `Tools/test-apis.sh` | Vérifie les appels réels avec vos clés et affiche les réponses brutes |
 | `Tools/typecheck.sh` | Relit le code hors Xcode (ne remplace pas une compilation) |
+| `Tools/run-tests.sh` | Exécute les tests de logique pure : persistance, anti-dépense, calcul des coûts |
 | `Tools/make-icon.sh` | Régénère l'icône de l'app |
 | `PLAN.md` | Le plan de construction et son état |
 | `docs/CAHIER_DES_CHARGES.md` | Le cahier des charges consolidé, pour qu'une session de travail future n'ait pas besoin de la conversation d'origine |
