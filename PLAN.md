@@ -20,14 +20,18 @@
 
 | Étape | Contenu | État |
 |---|---|---|
-| 1 | Projet Xcode, modèles, persistance JSON, Keychain, écran d'accueil | en cours |
-| 2 | Dossiers iCloud, signets, scan incrémental, envoi au store Gemini, écran Mes fichiers | à faire |
-| 3 | Analyse, recherche fichiers, synthèse en flux, cartes sources, QuickLook | à faire |
-| 4 | Perplexity, mode « les deux », anti-dépense, coûts et plafond | à faire |
-| 5 | iPad (`NavigationSplitView`, raccourcis), voix longue, historique et questions de suite | à faire |
-| 6 | Réglages complets, diagnostics, README, checklist appareil | à faire |
+| 1 | Projet Xcode, modèles, persistance JSON, Keychain, écran d'accueil | écrit |
+| 2 | Dossiers iCloud, signets, scan incrémental, envoi au store Gemini, écran Mes fichiers | écrit |
+| 3 | Analyse, recherche fichiers, synthèse en flux, cartes sources, QuickLook | écrit |
+| 4 | Perplexity, mode « les deux », anti-dépense, coûts et plafond | écrit |
+| 5 | iPad (`NavigationSplitView`, raccourcis), voix longue, historique et questions de suite | écrit |
+| 6 | Réglages complets, diagnostics, README, checklist appareil | écrit |
+| 7 | **Compilation, installation, essais sur vos appareils** | **vous attend** |
+
+« Écrit » signifie : rédigé, relu, et passé au compilateur Swift 6 pour les 12 fichiers sur 25 qui
+ne dépendent pas des cadres Apple. Cela ne veut pas dire « compilé » : voir ci-dessous.
 
 ## Ce que je ne peux pas vérifier depuis ici
 
-Cette session tourne dans un conteneur Linux **sans Xcode ni Swift** : je ne peux ni compiler, ni lancer le simulateur, ni signer, ni installer sur vos appareils. Je livre un projet qui s'ouvre dans Xcode et un protocole de test ; la compilation et l'installation se font sur votre Mac, et je corrige tout ce que le compilateur signale.
+Cette session tourne dans un conteneur Linux **sans Xcode** : je ne peux ni compiler, ni lancer le simulateur, ni signer, ni installer sur vos appareils. Je livre un projet qui s'ouvre dans Xcode et un protocole de test ; la compilation et l'installation se font sur votre Mac, et je corrige tout ce que le compilateur signale.
 De même, je n'ai pas vos clés API : `Tools/test-apis.sh` fait les appels réels et écrit les réponses brutes, que vous me recollerez pour figer les derniers formats (voir la section 5 de `NOTES_API.md`).

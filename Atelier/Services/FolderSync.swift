@@ -392,108 +392,110 @@ final class FolderSync: FileIndexing {
 
     /// Énumère un dossier. Le scope est ouvert une seule fois sur le dossier parent :
     /// il couvre récursivement tout le contenu, y compris les fichiers ajoutés depuis.
+    ///
+    /// Fonction `nonisolated async` : appelée depuis le fil principal, elle s'exécute quand même
+    /// hors de lui. Pas de `Task.detached`, qui n'hériterait pas de l'annulation et rendrait le
+    /// bouton « Arrêter » inopérant.
     private nonisolated static func readFolder(
         bookmark: Data,
         excludedSubpaths: [String],
         excludedExtensions: [String]
     ) async throws -> ScanOutcome {
-        try await Task.detached(priority: .utility) {
-            var isStale = false
-            let root = try URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &isStale)
+        var isStale = false
+        let root = try URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &isStale)
 
-            let accessed = root.startAccessingSecurityScopedResource()
-            defer { if accessed { root.stopAccessingSecurityScopedResource() } }
+        let accessed = root.startAccessingSecurityScopedResource()
+        defer { if accessed { root.stopAccessingSecurityScopedResource() } }
 
-            var refreshed: Data?
-            if isStale {
-                refreshed = try? root.bookmarkData(
-                    options: .minimalBookmark,
-                    includingResourceValuesForKeys: nil,
-                    relativeTo: nil
-                )
+        var refreshed: Data?
+        if isStale {
+            refreshed = try? root.bookmarkData(
+                options: .minimalBookmark,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+        }
+
+        let keys: [URLResourceKey] = [
+            .nameKey, .fileSizeKey, .contentModificationDateKey,
+            .isDirectoryKey, .isRegularFileKey, .isPackageKey,
+        ]
+        guard let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants],
+            errorHandler: { _, _ in true }   // un sous-dossier illisible n'interrompt pas le scan
+        ) else {
+            throw CocoaError(.fileReadUnknown)
+        }
+
+        let basePath = root.standardizedFileURL.path
+        var files: [ScannedFile] = []
+
+        for case let item as URL in enumerator {
+            try Task.checkCancellation()
+            guard let values = try? item.resourceValues(forKeys: Set(keys)) else { continue }
+            if values.isDirectory == true || values.isPackage == true { continue }
+            guard values.isRegularFile == true else { continue }
+
+            var relative = item.standardizedFileURL.path
+            if relative.hasPrefix(basePath) {
+                relative = String(relative.dropFirst(basePath.count))
             }
+            relative = relative.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            guard !relative.isEmpty else { continue }
 
-            let keys: [URLResourceKey] = [
-                .nameKey, .fileSizeKey, .contentModificationDateKey,
-                .isDirectoryKey, .isRegularFileKey, .isPackageKey,
-            ]
-            guard let enumerator = FileManager.default.enumerator(
-                at: root,
-                includingPropertiesForKeys: keys,
-                options: [.skipsHiddenFiles, .skipsPackageDescendants],
-                errorHandler: { _, _ in true }   // un sous-dossier illisible n'interrompt pas le scan
-            ) else {
-                throw CocoaError(.fileReadUnknown)
-            }
+            let name = values.name ?? item.lastPathComponent
+            let ext = (name as NSString).pathExtension.lowercased()
+            if excludedExtensions.contains(ext) { continue }
+            if excludedSubpaths.contains(where: { relative.hasPrefix($0) }) { continue }
 
-            let basePath = root.standardizedFileURL.path
-            var files: [ScannedFile] = []
+            files.append(ScannedFile(
+                relativePath: relative,
+                name: name,
+                // La taille peut manquer sur un fichier non téléchargé : elle sera revue à la lecture.
+                size: Int64(values.fileSize ?? 0),
+                modified: values.contentModificationDate ?? .distantPast
+            ))
+        }
 
-            for case let item as URL in enumerator {
-                if Task.isCancelled { break }
-                guard let values = try? item.resourceValues(forKeys: Set(keys)) else { continue }
-                if values.isDirectory == true || values.isPackage == true { continue }
-                guard values.isRegularFile == true else { continue }
-
-                var relative = item.standardizedFileURL.path
-                if relative.hasPrefix(basePath) {
-                    relative = String(relative.dropFirst(basePath.count))
-                }
-                relative = relative.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                guard !relative.isEmpty else { continue }
-
-                let name = values.name ?? item.lastPathComponent
-                let ext = (name as NSString).pathExtension.lowercased()
-                if excludedExtensions.contains(ext) { continue }
-                if excludedSubpaths.contains(where: { relative.hasPrefix($0) }) { continue }
-
-                files.append(ScannedFile(
-                    relativePath: relative,
-                    name: name,
-                    // La taille peut manquer sur un fichier non téléchargé : elle sera revue à la lecture.
-                    size: Int64(values.fileSize ?? 0),
-                    modified: values.contentModificationDate ?? .distantPast
-                ))
-            }
-
-            return ScanOutcome(files: files, refreshedBookmark: refreshed)
-        }.value
+        return ScanOutcome(files: files, refreshedBookmark: refreshed)
     }
 
     /// Lit un fichier. La lecture coordonnée est ce qui **attend** le téléchargement d'un fichier
     /// allégé par iCloud : la documentation le dit explicitement, et cela évite `NSMetadataQuery`.
     private nonisolated static func readFile(bookmark: Data, relativePath: String) async throws -> Data {
-        try await Task.detached(priority: .utility) {
-            var isStale = false
-            let root = try URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &isStale)
-            let accessed = root.startAccessingSecurityScopedResource()
-            defer { if accessed { root.stopAccessingSecurityScopedResource() } }
+        var isStale = false
+        let root = try URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &isStale)
+        let accessed = root.startAccessingSecurityScopedResource()
+        defer { if accessed { root.stopAccessingSecurityScopedResource() } }
 
-            var fileURL = root
-            for component in relativePath.split(separator: "/") {
-                fileURL.appendPathComponent(String(component))
+        var fileURL = root
+        for component in relativePath.split(separator: "/") {
+            fileURL.appendPathComponent(String(component))
+        }
+
+        // Demande de téléchargement au cas où : sans effet si le fichier est déjà là.
+        try? FileManager.default.startDownloadingUbiquitousItem(at: fileURL)
+
+        var readError: NSError?
+        var data: Data?
+        var innerError: Error?
+
+        // Le bloc est synchrone et non échappant : les variables locales ci-dessus peuvent
+        // être renseignées depuis l'intérieur sans franchir de frontière de concurrence.
+        let coordinator = NSFileCoordinator()
+        coordinator.coordinate(readingItemAt: fileURL, options: [], error: &readError) { url in
+            do {
+                data = try Data(contentsOf: url)
+            } catch {
+                innerError = error
             }
+        }
 
-            // Demande de téléchargement au cas où : sans effet si le fichier est déjà là.
-            try? FileManager.default.startDownloadingUbiquitousItem(at: fileURL)
-
-            var readError: NSError?
-            var data: Data?
-            var innerError: Error?
-
-            let coordinator = NSFileCoordinator()
-            coordinator.coordinate(readingItemAt: fileURL, options: [], error: &readError) { url in
-                do {
-                    data = try Data(contentsOf: url)
-                } catch {
-                    innerError = error
-                }
-            }
-
-            if let readError { throw readError }
-            if let innerError { throw innerError }
-            guard let data else { throw CocoaError(.fileReadUnknown) }
-            return data
-        }.value
+        if let readError { throw readError }
+        if let innerError { throw innerError }
+        guard let data else { throw CocoaError(.fileReadUnknown) }
+        return data
     }
 }
