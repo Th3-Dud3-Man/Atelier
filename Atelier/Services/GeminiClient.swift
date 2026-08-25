@@ -45,11 +45,17 @@ struct GeminiClient: Sendable {
         struct Part: Encodable, Sendable {
             var text: String?
             var inlineData: InlineData?
+            var fileData: FileData?
         }
 
         struct InlineData: Encodable, Sendable {
             var mimeType: String
             var data: String
+        }
+
+        struct FileData: Encodable, Sendable {
+            var mimeType: String
+            var fileUri: String
         }
 
         struct Content: Encodable, Sendable {
@@ -241,55 +247,71 @@ struct GeminiClient: Sendable {
         }
     }
 
-    /// Génération en flux. La documentation se contredit sur la forme exacte des fragments
-    /// (réponses `candidates` d'un côté, événements `delta` de l'autre) : les deux sont acceptées.
-    func generateStream(
-        model: String,
-        request payload: Request,
-        onText: @escaping @Sendable (String) -> Void
-    ) async throws -> Reply {
-        let body = try Self.encoder.encode(payload)
-        let urlRequest = request(
-            path: "/v1beta/models/\(model):streamGenerateContent?alt=sse",
-            method: "POST",
-            body: body
-        )
+    /// Événements d'une génération en flux. Le dernier est toujours `.finished`.
+    enum StreamEvent: Sendable {
+        case text(String)
+        case finished(Reply)
+    }
 
-        var full = ""
-        var usage = TokenUsage()
-        var passages: [Passage] = []
-        var supports: [Support] = []
-        var modelVersion = model
+    /// Génération en flux, livrée comme une suite d'événements : l'appelant les consomme dans
+    /// l'ordre depuis son propre contexte, ce qui évite tout passage de fermeture entre acteurs.
+    ///
+    /// La documentation se contredit sur la forme exacte des fragments (réponses `candidates`
+    /// d'un côté, événements `delta` de l'autre) : les deux sont acceptées, voir NOTES_API.md §3.3.
+    func generateStream(model: String, request payload: Request) -> AsyncThrowingStream<StreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let body = try Self.encoder.encode(payload)
+                    let urlRequest = request(
+                        path: "/v1beta/models/\(model):streamGenerateContent?alt=sse",
+                        method: "POST",
+                        body: body
+                    )
 
-        let lines = try await HTTP.streamLines(urlRequest, provider: "Gemini")
-        for try await line in lines {
-            guard let data = line.data(using: .utf8) else { continue }
+                    var full = ""
+                    var usage = TokenUsage()
+                    var passages: [Passage] = []
+                    var supports: [Support] = []
+                    var modelVersion = model
 
-            if let chunk = try? JSONDecoder().decode(GenerateResponse.self, from: data) {
-                let candidate = chunk.candidates?.first
-                let piece = (candidate?.content?.parts ?? []).compactMap(\.text).joined()
-                if !piece.isEmpty {
-                    full += piece
-                    onText(piece)
+                    for try await line in try await HTTP.streamLines(urlRequest, provider: "Gemini") {
+                        guard let data = line.data(using: .utf8) else { continue }
+
+                        if let chunk = try? JSONDecoder().decode(GenerateResponse.self, from: data) {
+                            let candidate = chunk.candidates?.first
+                            let piece = (candidate?.content?.parts ?? []).compactMap(\.text).joined()
+                            if !piece.isEmpty {
+                                full += piece
+                                continuation.yield(.text(piece))
+                            }
+                            if let chunkUsage = chunk.usageMetadata { usage = chunkUsage }
+                            if let version = chunk.modelVersion { modelVersion = version }
+                            // En flux, chaque réponse ne porte que les passages pas encore envoyés.
+                            passages.append(contentsOf: Self.passages(from: candidate?.groundingMetadata))
+                            supports.append(contentsOf: Self.supports(from: candidate?.groundingMetadata))
+                            continue
+                        }
+
+                        // Forme alternative documentée : { "delta": { "type": "text", "text": … } }
+                        if let event = try? JSONDecoder().decode(DeltaEvent.self, from: data),
+                           let piece = event.delta?.text, !piece.isEmpty {
+                            full += piece
+                            continuation.yield(.text(piece))
+                        }
+                    }
+
+                    continuation.yield(.finished(Reply(
+                        text: full, usage: usage, model: modelVersion,
+                        passages: passages, supports: supports
+                    )))
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
                 }
-                if let chunkUsage = chunk.usageMetadata { usage = chunkUsage }
-                if let version = chunk.modelVersion { modelVersion = version }
-                // En flux, chaque réponse ne porte que les passages pas encore envoyés.
-                let newPassages = Self.passages(from: candidate?.groundingMetadata)
-                if !newPassages.isEmpty { passages.append(contentsOf: newPassages) }
-                supports.append(contentsOf: Self.supports(from: candidate?.groundingMetadata))
-                continue
             }
-
-            // Forme alternative documentée sur la page de migration : { "delta": { "type": "text", "text": … } }
-            if let event = try? JSONDecoder().decode(DeltaEvent.self, from: data),
-               let piece = event.delta?.text, !piece.isEmpty {
-                full += piece
-                onText(piece)
-            }
+            continuation.onTermination = { _ in task.cancel() }
         }
-
-        return Reply(text: full, usage: usage, model: modelVersion, passages: passages, supports: supports)
     }
 
     private struct DeltaEvent: Decodable {
@@ -516,12 +538,14 @@ struct GeminiClient: Sendable {
 
     // ── JSON structuré ───────────────────────────────────────────────
 
+    /// Renvoie le texte brut plutôt qu'un dictionnaire : `[String: Any]` n'est pas `Sendable`
+    /// et ne peut donc pas traverser la frontière d'acteur. L'appelant analyse le texte chez lui.
     func generateJSON(
         model: String? = nil,
         systemInstruction: String,
         prompt: String,
         schema: JSONValue?
-    ) async throws -> (json: [String: Any], usage: TokenUsage, model: String) {
+    ) async throws -> (text: String, usage: TokenUsage, model: String) {
         let chosen = model ?? lightModel
         var config = Request.GenerationConfig(
             responseMimeType: "application/json",
@@ -536,7 +560,7 @@ struct GeminiClient: Sendable {
             systemInstruction: .init(parts: [.init(text: systemInstruction)]),
             generationConfig: config
         ))
-        return (Self.parseJSONObject(reply.text) ?? [:], reply.usage, reply.model)
+        return (reply.text, reply.usage, reply.model)
     }
 
     /// Le modèle peut encadrer sa réponse de balises Markdown : on lit quand même.
@@ -562,18 +586,105 @@ struct GeminiClient: Sendable {
 
     // ── Transcription ────────────────────────────────────────────────
 
-    func transcribe(audio: Data, mimeType: String, vocabulary: [String] = []) async throws -> Reply {
+    /// Au-delà de cette taille, l'audio passe par l'API Files plutôt que d'être joint à la requête.
+    /// La limite documentée est de 20 Mo pour la requête entière ; le base64 gonfle les octets d'un
+    /// tiers, d'où cette marge (12 Mo bruts ≈ 16 Mo encodés ≈ 6 minutes de WAV 16 kHz mono).
+    static let inlineAudioLimit = 12 * 1024 * 1024
+
+    /// Transcrit un enregistrement. Choisit seule la voie courte ou la voie Files.
+    func transcribe(
+        audio: Data,
+        mimeType: String = "audio/wav",
+        vocabulary: [String] = [],
+        onState: (@Sendable (String) -> Void)? = nil
+    ) async throws -> Reply {
         let hint = vocabulary.isEmpty
             ? ""
             : "\nTermes et noms propres pouvant apparaître : \(vocabulary.prefix(80).joined(separator: ", "))."
-        let payload = Request(
-            contents: [.init(role: "user", parts: [
-                .init(text: Prompts.transcription + hint),
-                .init(inlineData: .init(mimeType: mimeType, data: audio.base64EncodedString())),
-            ])],
+        let instruction = Prompts.transcription + hint
+
+        let audioPart: Request.Part
+        if audio.count <= Self.inlineAudioLimit {
+            audioPart = .init(inlineData: .init(mimeType: mimeType, data: audio.base64EncodedString()))
+        } else {
+            onState?("envoi de l'enregistrement")
+            let uploaded = try await uploadTemporaryFile(data: audio, mimeType: mimeType, displayName: "memo")
+            onState?("transcription")
+            audioPart = .init(fileData: .init(mimeType: mimeType, fileUri: uploaded))
+        }
+
+        return try await generate(model: lightModel, request: Request(
+            contents: [.init(role: "user", parts: [.init(text: instruction), audioPart])],
             generationConfig: .init(temperature: 0)
+        ))
+    }
+
+    // ── API Files (fichiers temporaires, 48 h, gratuite) ─────────────
+
+    private struct UploadedFile: Decodable {
+        struct File: Decodable {
+            var name: String?
+            var uri: String?
+            var state: String?
+        }
+        var file: File?
+    }
+
+    /// Envoie un fichier volumineux à l'API Files et renvoie son URI, une fois l'état ACTIVE atteint.
+    /// Même protocole reprenable que le store, mais le corps de l'étape 1 est enveloppé dans « file »
+    /// et la réponse de l'étape 2 l'est aussi — deux différences faciles à manquer.
+    func uploadTemporaryFile(data fileData: Data, mimeType: String, displayName: String) async throws -> String {
+        let metadata: [String: Any] = ["file": ["display_name": displayName]]
+        let startRequest = request(
+            path: "/upload/v1beta/files",
+            method: "POST",
+            body: try JSONSerialization.data(withJSONObject: metadata),
+            extraHeaders: [
+                "X-Goog-Upload-Protocol": "resumable",
+                "X-Goog-Upload-Command": "start",
+                "X-Goog-Upload-Header-Content-Length": String(fileData.count),
+                "X-Goog-Upload-Header-Content-Type": mimeType,
+            ]
         )
-        return try await generate(model: lightModel, request: payload)
+        let (_, startResponse) = try await HTTP.send(startRequest, provider: "Gemini")
+        guard let urlString = startResponse.value(forHTTPHeaderField: "x-goog-upload-url"),
+              let uploadURL = URL(string: urlString)
+        else {
+            throw APIError(provider: "Gemini", status: 0,
+                           message: "Google n'a pas fourni d'adresse d'envoi pour l'enregistrement.")
+        }
+
+        var upload = URLRequest(url: uploadURL)
+        upload.httpMethod = "POST"
+        upload.setValue("0", forHTTPHeaderField: "X-Goog-Upload-Offset")
+        upload.setValue("upload, finalize", forHTTPHeaderField: "X-Goog-Upload-Command")
+        upload.httpBody = fileData
+        let (data, _) = try await HTTP.send(upload, provider: "Gemini", attempts: 2, session: HTTP.uploadSession)
+
+        let decoded = try JSONDecoder().decode(UploadedFile.self, from: data)
+        guard let uri = decoded.file?.uri, let name = decoded.file?.name else {
+            throw APIError(provider: "Gemini", status: 0, message: "Envoi de l'enregistrement refusé.")
+        }
+
+        // Un fichier reste inutilisable tant qu'il est en PROCESSING.
+        var state = decoded.file?.state ?? "PROCESSING"
+        var attempts = 0
+        while state == "PROCESSING" && attempts < 60 {
+            try Task.checkCancellation()
+            try await Task.sleep(for: .seconds(2))
+            attempts += 1
+            let (statusData, _) = try await HTTP.send(request(path: "/v1beta/\(name)"), provider: "Gemini", attempts: 2)
+            // files.get renvoie l'objet nu, sans enveloppe « file ».
+            struct BareFile: Decodable {
+                var state: String?
+                var uri: String?
+            }
+            state = (try? JSONDecoder().decode(BareFile.self, from: statusData))?.state ?? "ACTIVE"
+        }
+        guard state != "FAILED" else {
+            throw APIError(provider: "Gemini", status: 0, message: "Google n'a pas pu lire l'enregistrement.")
+        }
+        return uri
     }
 
     // ── Vérification de la clé ───────────────────────────────────────

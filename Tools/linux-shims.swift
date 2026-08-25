@@ -17,3 +17,16 @@ extension HTTP {
         fatalError("substitut de vérification")
     }
 }
+
+/// Le Keychain s'appuie sur le framework Security, absent hors plateformes Apple.
+enum Keychain {
+    enum Item: String, CaseIterable {
+        case gemini = "fr.latelier.key.gemini"
+        case perplexity = "fr.latelier.key.perplexity"
+    }
+    static func set(_ value: String, for item: Item) {}
+    static func get(_ item: Item) -> String { "" }
+    static func remove(_ item: Item) {}
+    static func has(_ item: Item) -> Bool { false }
+    static func masked(_ item: Item) -> String { "" }
+}
