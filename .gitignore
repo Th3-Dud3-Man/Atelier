@@ -1,0 +1,16 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+.DS_Store
+
+# Secrets — jamais dans le dépôt (les clés vivent dans le Keychain de l'appareil)
+*.p8
+*.p12
+*.mobileprovision
+Secrets.plist
+.env
+Tools/keys.local.sh
