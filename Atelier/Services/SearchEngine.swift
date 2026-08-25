@@ -249,7 +249,7 @@ final class SearchEngine {
                 return
             }
 
-            try await proceed(question: question, mode: mode, analysis: analysis, runID: runID, forceWeb: false)
+            try await proceed(question: question, mode: mode, analysis: analysis, runID: runID)
         } catch is CancellationError {
             if isCurrent(runID) {
                 phase = .canceled
@@ -276,21 +276,32 @@ final class SearchEngine {
             let previousHasWeb = !prompt.previous.webSources.isEmpty
             let missing: SourceMode = previousHasWeb ? .files : .web
             let kept = previousHasWeb ? prompt.previous.webSources : prompt.previous.localSources
+
+            // Si la moitié manquante est justement celle qu'on ne peut pas faire, mieux vaut
+            // réutiliser et le dire, plutôt que de refaire en silence la moitié déjà en main.
+            guard canSearch(missing) else {
+                reuse(prompt.previous, runID: pending.runID, automatic: false)
+                errorText = missing == .web
+                    ? "La partie Internet n'a pas pu être ajoutée : aucune clé Perplexity n'est enregistrée."
+                    : "La partie fichiers n'a pas pu être ajoutée : aucun document n'est indexé."
+                return
+            }
+
             mutate(pending.runID) { record in
                 record.sources = kept
                 record.reusedFromID = prompt.previous.id
             }
-            launch(pending, mode: missing, forceWeb: missing == .web, keeping: kept)
+            launch(pending, mode: missing, forced: missing, keeping: kept)
 
         case .new:
-            launch(pending, mode: pending.mode, forceWeb: false, keeping: [])
+            launch(pending, mode: pending.mode, forced: nil, keeping: [])
         }
     }
 
     private func launch(
         _ pending: (question: String, mode: SourceMode, analysis: QueryAnalysis, runID: String),
         mode: SourceMode,
-        forceWeb: Bool,
+        forced: SourceMode?,
         keeping: [SourceRef]
     ) {
         task = Task { [weak self] in
@@ -298,7 +309,7 @@ final class SearchEngine {
             do {
                 try await self.proceed(
                     question: pending.question, mode: mode, analysis: pending.analysis,
-                    runID: pending.runID, forceWeb: forceWeb, keeping: keeping
+                    runID: pending.runID, forced: forced, keeping: keeping
                 )
             } catch is CancellationError {
                 if self.isCurrent(pending.runID) { self.phase = .canceled }
@@ -345,12 +356,12 @@ final class SearchEngine {
         mode: SourceMode,
         analysis: QueryAnalysis,
         runID: String,
-        forceWeb: Bool,
+        forced: SourceMode? = nil,
         keeping: [SourceRef] = []
     ) async throws {
         guard isCurrent(runID) else { return }
 
-        let resolved = resolveSource(requested: mode, analysis: analysis, forceWeb: forceWeb)
+        let resolved = forced ?? resolveSource(requested: mode, analysis: analysis)
         mutate(runID) { current in
             // En mode « Compléter », la source affichée reflète les deux moitiés.
             current.effectiveSource = keeping.isEmpty ? resolved : .both
@@ -440,13 +451,21 @@ final class SearchEngine {
         }
     }
 
-    private func resolveSource(requested: SourceMode, analysis: QueryAnalysis, forceWeb: Bool) -> SourceMode {
-        if forceWeb { return .web }
+    /// Cette source est-elle seulement possible dans l'état actuel ?
+    private func canSearch(_ source: SourceMode) -> Bool {
+        switch source {
+        case .web: !Keychain.get(.perplexity).isEmpty
+        case .files: !store.settings.storeName.isEmpty && !store.indexedFiles.isEmpty
+        case .both, .auto: true
+        }
+    }
+
+    private func resolveSource(requested: SourceMode, analysis: QueryAnalysis) -> SourceMode {
         var resolved = requested == .auto ? analysis.resolvedSource : requested
         // Sans clé Perplexity ou sans corpus, une source devient impossible : plutôt que de lancer
         // un appel voué à l'échec, on bascule sur celle qui reste.
-        let hasWeb = !Keychain.get(.perplexity).isEmpty
-        let hasCorpus = !store.settings.storeName.isEmpty && !store.indexedFiles.isEmpty
+        let hasWeb = canSearch(.web)
+        let hasCorpus = canSearch(.files)
         if !hasWeb && resolved == .both { resolved = .files }
         if !hasCorpus && resolved == .both { resolved = .web }
         if !hasWeb && resolved == .web && hasCorpus { resolved = .files }
