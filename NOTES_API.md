@@ -212,26 +212,112 @@ Dialecte du schéma : OpenAPI, **types en MAJUSCULES** (`OBJECT`, `STRING`, `ARR
 
 ## 4. Perplexity
 
-**Lu le 25/08/2026.** Base : `https://api.perplexity.ai`
+**Lu le 25/08/2026.** Base : `https://api.perplexity.ai` — authentification `Authorization: Bearer <clé>`.
 
-🔬 Vérifié depuis ce poste :
-- `POST /search` existe et répond `401` sans clé, avec ce corps exact :
-  `{"error":{"message":"Invalid API key provided. Ensure your API key is correct and active.","type":"invalid_api_key","code":401}}`
-- `POST /chat/completions` répond 401 (API Sonar, **dépréciée au 27/09/2026, non utilisée**).
-- `POST /v1/agent` répond 401 → l'endpoint existe. `POST /agent` et `POST /agents` renvoient 404.
-- En-tête CORS `access-control-allow-origin: *` (sans objet pour l'app native).
+Bandeau officiel : « Sonar Chat Completions is now Agent API. Sonar will be supported until **September 27, 2026**. » → `/chat/completions` n'est pas utilisée. ✅
 
-Le détail des schémas de requête et de réponse est en cours de relevé ; il complétera cette section avant l'implémentation du client Perplexity. Aucun champ ne sera codé sans être documenté ici.
+🔬 Vérifié depuis ce poste : `POST /search` et `POST /v1/agent` existent et répondent 401 sans clé, avec ce corps exact :
+`{"error":{"message":"Invalid API key provided. Ensure your API key is correct and active.","type":"invalid_api_key","code":401}}`
+`POST /agent` et `POST /agents` renvoient 404 — le bon chemin de l'agent est bien `/v1/agent`.
+
+### 4.1 Search API — niveau Standard
+
+```
+POST /search
+{ "query": "…"  |  ["…", "…"],     // jusqu'à 5 requêtes en un appel
+  "max_results": 8,                 // 1 à 20, défaut 10
+  "search_context_size": "high",    // low | medium | high, défaut high
+  "search_recency_filter": "month", // hour | day | week | month | year
+  "search_domain_filter": ["…"],    // 20 entrées maximum, « -domaine » pour exclure
+  "country": "FR", "search_language_filter": ["fr"] }
+```
+✅ Champs relevés dans le schéma OpenAPI officiel. `search_context_size` **ne peut pas** être combiné avec `max_tokens` ou `max_tokens_per_page` dans le même appel.
+
+Réponse : ✅
+```json
+{ "id": "…",
+  "results": [ { "title": "…", "url": "…", "snippet": "…", "date": "2026-05-01", "last_updated": "2026-05-21" } ],
+  "server_time": null }
+```
+`title`, `url`, `snippet` sont obligatoires ; `date` et `last_updated` peuvent être nuls. **Il n'y a aucun objet `usage` ni `cost`.** ✅
+
+**Tarification — le point le plus utile de toute cette section** : « Search API charges for each successful `POST /search` request, **not for each query in the request**. » À 5 $ les mille appels, une recherche coûte donc **exactement 0,005 $**, qu'elle porte une ou cinq requêtes, quel que soit `max_results`. ✅ L'estimation affichée avant lancement est donc exacte, pas approchée.
+
+À `search_context_size: "high"` (le défaut), les extraits font plusieurs milliers de caractères : assez pour rédiger une synthèse sans aller chercher les pages nous-mêmes. ✅ C'est ce que fait l'app.
+
+Limite de débit : **50 unités par seconde**, indépendante du palier ; une requête multiple consomme une unité **par requête** du tableau. ✅
+
+### 4.2 Agent API — niveau Approfondi
+
+```
+POST /v1/agent
+{ "preset": "medium",            // fast | low | medium | high | xhigh | wide-research
+  "input": "…",                  // chaîne, ou tableau d'éléments {type,role,content}
+  "language_preference": "fr",
+  "stream": false }
+```
+✅ `input`, et non `messages`. Les préréglages portent le modèle, le nombre de tours et les outils ; ils ont été renommés (`deep-research` → `medium`).
+
+Réponse : ✅
+```json
+{ "status": "completed",
+  "output": [
+    { "type": "search_results", "results": [ { "id": 1, "url": "…", "title": "…", "snippet": "…", "date": "…" } ] },
+    { "type": "message", "content": [ { "type": "output_text", "text": "…" } ] }
+  ],
+  "usage": { "input_tokens": 12088, "output_tokens": 2743,
+             "cost": { "currency": "USD", "total_cost": 0.04021 } } }
+```
+
+⚠️ Deux pièges relevés :
+- `output_text` **est une commodité des SDK**, pas un champ JSON : en HTTP brut il faut parcourir `output[]`, prendre les éléments `type == "message"`, puis leurs `content[]` de `type == "output_text"`. C'est ce que fait le client.
+- Le format des citations **change selon le préréglage** : `fast` produit `[1]`, les autres `[web:1]`. L'app n'exploite pas ces marqueurs — elle prend les `search_results` comme sources et fait rédiger la synthèse par Gemini, ce qui rend la question sans objet.
+
+Tarification des outils : `web_search` 0,0025 $ par appel, `fetch_url` 0,0005 $, plus les tokens du modèle. Le coût réel est renvoyé dans `usage.cost.total_cost` ; l'app l'utilise quand il est présent et retombe sur la grille sinon. ✅
+
+### 4.3 Erreurs
+
+Enveloppe observée : `{"error": {"message": …, "type": …, "code": 401}}` (`code` est un **nombre**). La Search API renvoie en plus un 422 de validation au format `{"detail": [{"loc": …, "msg": …, "type": …}]}`. ✅
+
+⚠️ `Retry-After` n'est documenté que pour une autre API de Perplexity (Router). Le client honore l'en-tête s'il est présent et retombe sinon sur un délai croissant — correct dans les deux cas.
+
+Non facturés : les requêtes invalides, celles limitées en débit, et les échecs amont. ✅
 
 ---
 
-## 5. Ce qui reste à confirmer avec une vraie clé
+---
+
+## 5. Audio : quel format enregistrer
+
+**Lu le 25/08/2026** sur les pages Audio et Files API.
+
+Formats acceptés, liste exhaustive et identique sur les deux pages officielles : ✅
+`audio/wav`, `audio/mp3`, `audio/aiff`, `audio/aac`, `audio/ogg`, `audio/flac`.
+
+**`audio/mp4` n'y figure pas.** C'est pourtant le format naturel d'un enregistrement iOS (`kAudioFormatMPEG4AAC` dans un conteneur `.m4a`). La recherche a cherché la chaîne « audio/mp4 » dans les guides audio, les deux pages Files, la référence REST de `generateContent` et celle des Interactions : **zéro occurrence**.
+
+→ L'app enregistre donc en **WAV, PCM linéaire, 16 kHz, mono, 16 bits**. Ce n'est pas un compromis : Gemini ramène de toute façon tout l'audio à 16 kbps et fusionne les canaux ✅, si bien qu'enregistrer plus riche ne ferait que grossir l'envoi sans rien améliorer.
+
+| Limite | Valeur |
+|---|---|
+| Taille maximale d'une requête avec audio joint | **20 Mo**, requête entière comprise ✅ |
+| Durée maximale d'un prompt | 9,5 heures ✅ |
+| Tokens | **32 par seconde**, soit 1 920 par minute ✅ |
+| API Files : taille, durée de vie | 2 Go par fichier, **48 heures**, gratuite ✅ |
+
+Le base64 gonfle les octets d'un tiers : le seuil de bascule de l'app est fixé à **12 Mo bruts** (≈ 16 Mo encodés, ≈ 6 minutes), au-delà desquels l'enregistrement passe par l'API Files. Un mémo de dix minutes fait ≈ 19 Mo bruts : il emprunte donc la voie Files, comme prévu.
+
+⚠️ Deux différences de forme faciles à manquer, prises en compte dans le code : l'étape 1 de l'API Files enveloppe son corps dans `{"file": {...}}` (contrairement au store), et la réponse de l'étape 2 est elle aussi enveloppée (`.file.uri`), alors que `files.get` renvoie l'objet nu. Un fichier reste inutilisable tant que son `state` vaut `PROCESSING` : l'app attend `ACTIVE`. ✅
+
+---
+
+## 6. Ce qui reste à confirmer avec une vraie clé
 
 `Tools/test-apis.sh` exécute ces vérifications et affiche les réponses brutes, à recoller ici :
 
-1. ⚠️ Forme exacte des fragments SSE de `streamGenerateContent` (voir 3.3).
-2. ⚠️ Acceptation de `responseSchema` malgré la mention « deprecated » (voir 3.2).
-3. ⚠️ Type MIME audio produit par `AVAudioRecorder` accepté tel quel par Gemini (relevé en cours).
-4. ⚠️ Présence effective de `pageNumber` sur un PDF réel du corpus.
-5. ⚠️ Schémas de requête et de réponse Perplexity (section 4).
-6. ⚠️ Coût réel d'une recherche complète, à comparer à l'estimation affichée.
+1. ⚠️ Forme exacte des fragments SSE de `streamGenerateContent` (§3.3). Le code accepte les deux formes documentées.
+2. ⚠️ Acceptation de `responseSchema` malgré la mention « deprecated » (§3.2). Le code refait l'appel sans le schéma en cas de 400.
+3. ⚠️ Présence effective de `pageNumber` sur un PDF réel du corpus (§2.4).
+4. ⚠️ Lisibilité de l'en-tête `x-goog-upload-url` depuis l'app (§2.2) — sans objet en natif, mais à confirmer au premier import.
+5. ⚠️ Concordance entre le coût affiché et la facturation réelle, côté Google comme côté Perplexity.
+6. ⚠️ Acceptation du WAV 16 kHz produit par `AVAudioRecorder`, et comportement sur un mémo de dix minutes (§5).
