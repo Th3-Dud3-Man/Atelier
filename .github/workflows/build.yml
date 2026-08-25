@@ -1,0 +1,55 @@
+name: Compiler
+
+# Ce flux ne demande aucun secret et ne signe rien : il sert à savoir, à chaque envoi,
+# si le projet compile. C'est le moyen le plus rapide de me faire remonter les erreurs
+# du compilateur sans avoir à ouvrir Xcode.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Compilation pour le simulateur
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Choisir la version d'Xcode la plus récente
+        run: |
+          ls -d /Applications/Xcode*.app
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcodebuild -version
+          # L'app demande iOS 26 : si le SDK n'est pas là, autant le dire tout de suite.
+          xcodebuild -showsdks | grep -i "iphoneos" || true
+
+      - name: Compiler
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Atelier.xcodeproj \
+            -scheme Atelier \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build.log
+
+      - name: Rassembler les erreurs et les avertissements
+        if: always()
+        run: |
+          echo '## Erreurs et avertissements' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E "(error|warning|note):" build.log | sort -u | head -200 >> "$GITHUB_STEP_SUMMARY" \
+            || echo "Aucune." >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Garder le journal complet
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journal-de-compilation
+          path: build.log
+          if-no-files-found: ignore

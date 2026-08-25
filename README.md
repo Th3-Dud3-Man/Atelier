@@ -19,6 +19,8 @@ Budget de fonctionnement : de l'ordre de 25 € par mois tout compris, iCloud in
 
 ---
 
+> **Vous partez de zéro ?** Suivez `ACHATS_ET_CLES.md` : il reprend, pas à pas, ce qu'il faut acheter, où obtenir chaque clé, et quoi déposer dans les secrets GitHub pour construire l'app et l'envoyer sur TestFlight sans passer par un câble.
+
 ## 2. Installer l'app sur vos appareils
 
 **Une seule fois, sur le Mac :**
@@ -199,7 +201,10 @@ L'abonnement Apple Developer à 99 € par an n'entre pas dans ce compte, et l'a
 
 | Fichier | À quoi il sert |
 |---|---|
+| `ACHATS_ET_CLES.md` | Ce qu'il faut acheter, où obtenir chaque clé, quoi mettre dans les secrets GitHub |
 | `CHECKLIST_APPAREIL.md` | Ce que vous devez vérifier vous-même, dans l'ordre, sur iPhone et iPad |
+| `.github/workflows/build.yml` | Compile à chaque envoi de code et affiche les erreurs — aucun secret nécessaire |
+| `.github/workflows/testflight.yml` | Construit, signe et dépose une version sur TestFlight, sur demande |
 | `NOTES_API.md` | Les formats réels des API, relevés dans la documentation officielle, avec ce qui reste à confirmer |
 | `Tools/test-apis.sh` | Vérifie les appels réels avec vos clés et affiche les réponses brutes |
 | `Tools/typecheck.sh` | Relit le code hors Xcode (ne remplace pas une compilation) |

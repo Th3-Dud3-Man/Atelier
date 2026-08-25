@@ -26,7 +26,8 @@
 | 4 | Perplexity, mode « les deux », anti-dépense, coûts et plafond | écrit |
 | 5 | iPad (`NavigationSplitView`, raccourcis), voix longue, historique et questions de suite | écrit |
 | 6 | Réglages complets, diagnostics, README, checklist appareil | écrit |
-| 7 | **Compilation, installation, essais sur vos appareils** | **vous attend** |
+| 7 | Construction automatique (GitHub Actions) et dépôt sur TestFlight | écrit |
+| 8 | **Achats, clés, secrets, installation, essais sur vos appareils** | **vous attend** |
 
 « Écrit » signifie : rédigé, relu, et passé au compilateur Swift 6 pour les 12 fichiers sur 31 qui
 ne dépendent pas des cadres Apple. Cela ne veut pas dire « compilé » : voir ci-dessous.
