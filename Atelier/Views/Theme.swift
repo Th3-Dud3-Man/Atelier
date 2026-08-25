@@ -9,8 +9,10 @@ extension Color {
 
 extension Font {
     /// Corps des synthèses et des citations : une serif, pour distinguer la lecture de l'interface.
-    static func serifBody(_ size: CGFloat = 17) -> Font {
-        .system(size: size, weight: .regular, design: .serif)
+    /// Bâtie sur un style de texte et non sur une taille fixe, afin de suivre les tailles
+    /// dynamiques d'accessibilité.
+    static func serifBody(_ style: Font.TextStyle = .body) -> Font {
+        .system(style, design: .serif)
     }
 }
 

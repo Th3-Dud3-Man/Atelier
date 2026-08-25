@@ -298,6 +298,11 @@ struct ResultsView: View {
                         followUpFocused = true
                     }
                     .buttonStyle(.bordered)
+
+                    Button("Copier la synthèse") {
+                        UIPasteboard.general.string = shareText(record)
+                    }
+                    .buttonStyle(.bordered)
                 }
 
                 if showingFollowUpField {
