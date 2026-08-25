@@ -2,9 +2,10 @@
 
 Deux moments distincts, et c'est ce qui compte.
 
-**Partie A — construire et installer l'app.** Uniquement Apple et GitHub. Aucune clé
-d'intelligence artificielle n'intervient ici, et il n'y a rien à payer d'autre que
-l'abonnement développeur que vous avez déjà. Comptez une heure.
+**Partie A — construire et installer l'app.** Uniquement Apple et GitHub, **et aucun Mac
+n'est nécessaire** : le certificat et le profil de signature sont créés par l'API d'Apple
+depuis GitHub. Rien à payer d'autre que l'abonnement développeur que vous avez déjà.
+Comptez une demi-heure, entièrement dans un navigateur.
 
 **Partie B — une fois l'app sur l'iPhone.** C'est là que vous créez vos clés Gemini et
 Perplexity, que vous les collez dans les réglages de l'app, et que vous lui désignez
@@ -16,144 +17,119 @@ partie A ne servent qu'à Apple — signer l'app et la déposer sur TestFlight.
 
 ---
 
-# PARTIE A — Construire et installer l'app
+# PARTIE A — Construire et installer l'app (sans Mac)
 
-## Étape 0 — Vérifier que le code compile (gratuit, cinq minutes, aucun compte)
+Tout se fait depuis un navigateur. Le certificat et le profil de signature, qu'on exporte
+d'habitude depuis un Mac, sont créés ici par l'API d'Apple, à l'intérieur de GitHub.
 
-À faire en premier : inutile de s'occuper de certificats si le code ne compile pas.
+Vous n'avez que deux formulaires à remplir chez Apple et quatre valeurs à copier.
+
+## Étape 0 — Vérifier que le code compile (gratuit, cinq minutes)
+
+Inutile de s'occuper de signature si le code ne compile pas.
 
 1. Sur GitHub, onglet **Actions**.
 2. Le flux **Compiler** s'est déclenché tout seul au dernier envoi de code. Ouvrez la
    dernière exécution.
-3. **Si c'est vert :** passez à l'étape 1.
-4. **Si c'est rouge :** ouvrez l'exécution, copiez l'encadré « Erreurs et avertissements »
-   et envoyez-le-moi. Je corrige, et vous relancez. C'est la première fois que ce code voit
-   un vrai compilateur : quelques allers-retours sont normaux.
+3. **Vert :** passez à l'étape 1.
+4. **Rouge :** copiez l'encadré « Erreurs et avertissements » et envoyez-le-moi. Je
+   corrige, vous relancez. C'est la première fois que ce code voit un vrai compilateur :
+   quelques allers-retours sont normaux.
 
-## Étape 1 — Déclarer l'app chez Apple
+## Étape 1 — Créer la clé App Store Connect
 
-1. **developer.apple.com/account** → **Certificates, Identifiers & Profiles** →
-   **Identifiers** → le **+** bleu.
-2. **App IDs** → **App** → Continue.
-3. *Description* : `L Atelier`. *Bundle ID* : cochez **Explicit** et saisissez exactement
-   `com.bureau.latelier`.
-4. Ne cochez aucune capacité : l'app n'en utilise aucune.
-5. **Continue** → **Register**.
-
-**Notez votre Team ID** : les dix caractères visibles en haut à droite de la page du
-compte, sous « Membership ». Vous en aurez besoin à l'étape 6.
-
-## Étape 2 — Créer la fiche de l'app
-
-1. **appstoreconnect.apple.com** → **Mes apps** → le **+** → **Nouvelle app**.
-2. Plateforme **iOS** · nom `L'Atelier` (s'il est déjà pris, mettez `L'Atelier — Lucas` :
-   ce nom ne se voit que dans TestFlight) · langue **Français** · *Bundle ID*
-   `com.bureau.latelier` · **SKU** `latelier-1`.
-3. **Créer**. Rien d'autre à remplir : une app qui reste en TestFlight n'a besoin ni de
-   captures d'écran, ni de description, ni de passer en revue.
-
-## Étape 3 — Exporter le certificat de distribution
-
-C'est ce qui prouve à Apple que l'app vient de vous. **Sur le Mac.**
-
-1. **Xcode** → menu **Xcode** → **Settings** → onglet **Accounts**.
-2. Connectez votre compte Apple, sélectionnez votre équipe, puis **Manage Certificates…**.
-3. En bas à gauche, le **+** → **Apple Distribution**. Une ligne apparaît.
-4. Fermez Xcode. Ouvrez **Trousseaux d'accès** (Applications → Utilitaires).
-5. À gauche : trousseau **Connexion**, catégorie **Mes certificats**.
-6. Trouvez **Apple Distribution: votre nom (XXXXXXXXXX)** et **dépliez la ligne** avec le
-   petit triangle : elle doit contenir une **clé privée**. Sans clé privée, ce n'est pas
-   la bonne ligne, et la construction échouera plus tard.
-7. Clic droit sur le certificat → **Exporter…** → format **Échange d'informations
-   personnelles (.p12)** → enregistrez sur le bureau sous `certificat.p12`.
-8. Un mot de passe vous est demandé : **inventez-en un et notez-le.** (Le Mac demandera
-   ensuite votre mot de passe de session : ce n'est pas le même, ne les confondez pas.)
-
-## Étape 4 — Créer le profil de provisionnement
-
-1. **developer.apple.com/account** → **Profiles** → le **+**.
-2. Sous **Distribution** : **App Store Connect** → Continue.
-3. *App ID* : `com.bureau.latelier` → Continue.
-4. Choisissez le certificat **Apple Distribution** de l'étape 3 → Continue.
-5. *Provisioning Profile Name* : `Atelier App Store`.
-6. **Generate** → **Download**. Mettez le `.mobileprovision` sur le bureau.
-
-## Étape 5 — Créer la clé App Store Connect
-
-C'est elle qui permet à GitHub de déposer la version sans votre mot de passe.
+C'est la seule clé Apple dont vous aurez besoin. Elle sert à tout : créer l'identifiant de
+l'app, le certificat, le profil, et déposer les versions.
 
 1. **appstoreconnect.apple.com** → **Utilisateurs et accès** → onglet **Intégrations**.
 2. Section **App Store Connect API**, sous-onglet **Accès à l'équipe** → le **+**.
 3. *Nom* : `GitHub` · *Accès* : **App Manager** → **Générer**.
-4. **Téléchargez le fichier `.p8` tout de suite** : Apple ne le propose qu'une fois.
-5. Sur la même page, notez le **Key ID** (dix caractères) et l'**Issuer ID** (long
+4. **Téléchargez le fichier `.p8` tout de suite** : Apple ne le propose qu'une seule fois.
+5. Notez, sur la même page, le **Key ID** (dix caractères) et l'**Issuer ID** (long
    identifiant à tirets, en haut de la section).
 
-## Étape 6 — Déposer les secrets sur GitHub
+*Le `.p8` est un fichier texte. Ouvrez-le avec n'importe quel éditeur — Bloc-notes,
+TextEdit — pour en copier le contenu. Sur iPhone ou iPad, renommez-le en `.txt` dans
+l'app Fichiers, il s'ouvrira alors d'une simple touche.*
 
-Vous avez maintenant les quatre choses nécessaires. Un script les demande dans l'ordre,
-vérifie chacune, et les dépose. **Sur le Mac**, dans le Terminal :
+## Étape 2 — Créer un jeton GitHub
 
-```bash
-cd ~/Desktop && git clone https://github.com/Th3-Dud3-Man/Atelier.git
-cd Atelier && git checkout claude/new-session-rxzige
-bash Tools/preparer-secrets.sh
-```
+Il permet au flux de déposer lui-même les secrets qu'il fabrique, pour que vous n'ayez
+jamais à manipuler une clé privée.
 
-Le script vous demande, une par une : le Team ID, le `.p12` et son mot de passe, le
-`.mobileprovision`, puis le `.p8` avec son Key ID et son Issuer ID. Il vérifie au passage
-que le mot de passe ouvre bien le certificat, que celui-ci contient sa clé privée, et que
-le profil vise bien `com.bureau.latelier` — les trois causes d'échec les plus courantes,
-détectées avant de perdre une construction.
+1. **github.com/settings/personal-access-tokens** → **Generate new token**
+   (*fine-grained*).
+2. *Repository access* : **Only select repositories** → votre dépôt **Atelier**.
+3. *Repository permissions* → **Secrets** → **Read and write**. Rien d'autre.
+4. *Expiration* : 30 jours suffisent, ce jeton ne sert qu'aujourd'hui.
+5. **Generate token** et copiez-le : lui non plus ne se réaffiche pas.
 
-Si l'outil `gh` est installé et connecté, il dépose les huit secrets lui-même. Sinon il
-place chaque valeur dans le presse-papier, une à la fois, et vous accompagne pendant que
-vous les collez dans **Settings → Secrets and variables → Actions → New repository
-secret**.
+## Étape 3 — Déposer les quatre premiers secrets
 
-<details>
-<summary>Si vous préférez tout faire à la main</summary>
+Sur votre dépôt : **Settings** → **Secrets and variables** → **Actions** →
+**New repository secret**. Quatre fois, le nom exactement comme écrit ici.
 
 | Nom du secret | Ce qu'on y met |
 |---|---|
-| `APPLE_TEAM_ID` | les dix caractères de l'équipe (étape 1) |
-| `BUILD_CERTIFICATE_BASE64` | `base64 -i ~/Desktop/certificat.p12 \| pbcopy` |
-| `P12_PASSWORD` | le mot de passe inventé à l'étape 3 |
-| `PROVISIONING_PROFILE_BASE64` | `base64 -i ~/Desktop/*.mobileprovision \| pbcopy` |
-| `KEYCHAIN_PASSWORD` | n'importe quel mot de passe inventé, jamais réutilisé |
-| `ASC_KEY_ID` | le Key ID (étape 5) |
-| `ASC_ISSUER_ID` | l'Issuer ID (étape 5) |
-| `ASC_PRIVATE_KEY` | `cat ~/Downloads/AuthKey_*.p8 \| pbcopy`, lignes BEGIN et END comprises |
+| `ASC_KEY_ID` | le Key ID de l'étape 1 |
+| `ASC_ISSUER_ID` | l'Issuer ID de l'étape 1 |
+| `ASC_PRIVATE_KEY` | **tout le contenu** du fichier `.p8`, lignes `BEGIN` et `END` comprises |
+| `GH_SECRETS_TOKEN` | le jeton de l'étape 2 |
 
-</details>
+## Étape 4 — Lancer « Préparer la signature »
 
-**Une fois les huit secrets en place, effacez le `.p12`, le `.mobileprovision` et le `.p8`.**
-GitHub les garde chiffrés et ne les réaffichera jamais ; un `.p12` qui traîne est un `.p12`
-qui fuit.
+1. Onglet **Actions** → flux **Préparer la signature** → **Run workflow**.
+2. Une minute. Le flux, dans l'ordre : déclare l'identifiant `com.bureau.latelier` chez
+   Apple s'il n'existe pas ; fabrique une clé privée ; demande à Apple un certificat de
+   distribution ; crée le profil `Atelier App Store` ; en déduit votre identifiant
+   d'équipe ; et dépose **cinq secrets de plus** sur le dépôt.
 
-## Étape 7 — Construire et envoyer
+La clé privée est fabriquée dans l'exécution et va directement dans les secrets : elle
+n'est jamais affichée, jamais écrite sur un disque qui vous survive.
 
-1. GitHub → onglet **Actions** → flux **TestFlight** → **Run workflow** → branche
+**Si Apple refuse en disant que vous avez trop de certificats de distribution** (la limite
+est de trois) : relancez le flux en cochant *Révoquer le plus ancien certificat de
+distribution*. Attention, un certificat révoqué invalide les apps signées avec lui — sans
+effet si vous ne distribuez rien d'autre.
+
+**Ce flux n'est à relancer que dans un an**, quand le certificat expirera.
+
+## Étape 5 — Créer la fiche de l'app
+
+Maintenant que l'identifiant existe chez Apple, la fiche peut être créée.
+
+1. **appstoreconnect.apple.com** → **Mes apps** → le **+** → **Nouvelle app**.
+2. Plateforme **iOS** · nom `L'Atelier` (s'il est pris, `L'Atelier — Lucas` : ce nom ne se
+   voit que dans TestFlight) · langue **Français** · *Bundle ID* `com.bureau.latelier` ·
+   **SKU** `latelier-1`.
+3. **Créer**. Rien d'autre à remplir : une app qui reste en TestFlight n'a besoin ni de
+   captures d'écran, ni de description, ni de passer en revue.
+
+## Étape 6 — Construire et envoyer
+
+1. Onglet **Actions** → flux **TestFlight** → **Run workflow** → branche
    `claude/new-session-rxzige` → **Run workflow**.
-2. Cinq à dix minutes. Puis App Store Connect traite la version, une dizaine de minutes
-   de plus.
+2. Cinq à dix minutes, puis une dizaine de minutes de traitement chez Apple.
 3. **appstoreconnect.apple.com** → votre app → onglet **TestFlight** → quand la version
    est « Prête à tester », ajoutez-vous comme **testeur interne**.
 
-## Étape 8 — Installer sur l'iPhone et l'iPad
+## Étape 7 — Installer sur l'iPhone et l'iPad
 
 1. Installez **TestFlight** depuis l'App Store, sur les deux appareils.
 2. Ouvrez-le avec le même compte Apple : **L'Atelier** y est. Installez.
-3. Ouvrez l'app. Elle vous dira qu'il lui manque une clé — c'est normal, c'est la partie B.
+3. L'app vous dira qu'il lui manque une clé — c'est normal, c'est la partie B.
 
-**L'app est construite et installée. La partie A est terminée, et vous n'y reviendrez que
-pour installer une nouvelle version : un clic sur « Run workflow », rien d'autre.**
+**Une fois cette partie faite, vous n'y reviendrez que pour installer une nouvelle
+version : un clic sur « Run workflow », rien d'autre.**
+
+Quand tout marche, vous pouvez supprimer le secret `GH_SECRETS_TOKEN` : il n'a servi qu'à
+l'étape 4.
 
 ---
 
 # PARTIE B — Ce que vous mettez dans l'app
 
-## Étape 9 — Préparer le dossier iCloud
+## Étape 8 — Préparer le dossier iCloud
 
 1. Sur l'iPhone : **Réglages** → votre nom → **iCloud** → **iCloud Drive** activé.
 2. Rangez vos documents dans **un seul dossier** d'iCloud Drive, sous-dossiers permis.
@@ -161,7 +137,7 @@ pour installer une nouvelle version : un clic sur « Run workflow », rien d'aut
 3. « Optimiser le stockage » peut rester activé : l'app déclenche elle-même le
    téléchargement du fichier dont elle a besoin, quand elle en a besoin.
 
-## Étape 10 — Créer la clé Gemini
+## Étape 9 — Créer la clé Gemini
 
 C'est elle qui lit vos fichiers et rédige les réponses. Sans elle, l'app ne fait rien.
 
@@ -182,7 +158,7 @@ C'est elle qui lit vos fichiers et rédige les réponses. Sans elle, l'app ne fa
 *Renouvellement : rien à faire. Google facture l'usage du mois écoulé, comme
 l'électricité. Un mois sans question ne coûte rien, et le service ne s'interrompt jamais.*
 
-## Étape 11 — Créer la clé Perplexity (facultative)
+## Étape 10 — Créer la clé Perplexity (facultative)
 
 Elle ne sert qu'à la recherche Internet. Sans elle, l'app cherche dans vos fichiers et
 le dit clairement.
@@ -201,7 +177,7 @@ le dit clairement.
 *À ne pas confondre avec l'abonnement Perplexity Pro (~20 €/mois), qui est un autre
 produit dont l'app n'a pas besoin.*
 
-## Étape 12 — Coller les deux clés dans l'app
+## Étape 11 — Coller les deux clés dans l'app
 
 1. Ouvrez **L'Atelier** sur l'iPhone.
 2. Icône **horloge** (en haut à gauche) → **engrenage** (en haut à droite).
@@ -214,7 +190,7 @@ produit dont l'app n'a pas besoin.*
 5. Fermez complètement l'app, rouvrez-la, revenez aux réglages : **les clés doivent
    toujours être là**. Si elles ont disparu, dites-le-moi.
 
-## Étape 13 — Désigner votre dossier
+## Étape 12 — Désigner votre dossier
 
 1. Retour à l'accueil → icône **dossier** (en haut à droite) → **Ajouter un dossier**.
 2. Le sélecteur d'iCloud Drive s'ouvre : choisissez **un dossier**, pas un fichier.
@@ -224,7 +200,7 @@ Sur un corpus de plus de 3 Go, l'app remplit son budget avec vos documents les p
 récents, laisse le reste au catalogue, et ira y chercher à la demande. C'est prévu, et
 `CHECKLIST_APPAREIL.md` contient le test qui le vérifie.
 
-## Étape 14 — Votre première question
+## Étape 13 — Votre première question
 
 Posez une question dont vous **connaissez la réponse** dans vos documents, formulée **avec
 d'autres mots que le texte**. C'est le seul essai qui prouve que la recherche fonctionne
@@ -243,7 +219,7 @@ signaler.
 | Apple Developer | developer.apple.com | 99 € / an | automatique |
 | iCloud | Réglages de l'iPhone | 0,99 € à 2,99 € / mois | automatique |
 | Gemini | aistudio.google.com | à l'usage, quelques € / mois | prélevé chaque mois |
-| Perplexity | perplexity.ai | crédits prépayés, ~0,006 € la recherche | **à activer** (étape 11) |
+| Perplexity | perplexity.ai | crédits prépayés, ~0,006 € la recherche | **à activer** (étape 10) |
 | GitHub Actions | github.com | gratuit | — |
 
 Le plafond intégré à l'app est réglé à environ 23 € TTC par mois et couvre Gemini et
@@ -258,14 +234,19 @@ aucun secret, le rendre public rend tout illimité.
 
 # Si quelque chose bloque
 
-**« No signing certificate found »** — Le `.p12` a été exporté sans sa clé privée.
-Reprenez l'étape 3 en dépliant bien la ligne du trousseau. (Le script de l'étape 6 détecte
-ce cas avant la construction.)
+**« Les secrets de signature manquent »** — L'étape 4 n'a pas été faite, ou elle a échoué.
+Ouvrez son exécution : le message d'Apple y est repris tel quel.
 
-**« Provisioning profile doesn't match »** — Le profil ne vise pas `com.bureau.latelier`,
-ou son nom diffère. Reprenez l'étape 4.
+**« No signing certificate found » ou « Provisioning profile doesn't match »** — Le
+certificat et le profil ne se correspondent plus. Relancez **Préparer la signature** : il
+retire l'ancien profil et en recrée un accordé au nouveau certificat.
 
-**« No account for team »** — `APPLE_TEAM_ID` est faux ou contient un espace.
+**L'étape 4 échoue en disant que le jeton n'a pas le droit d'écrire les secrets** — Le
+jeton de l'étape 2 n'a pas l'autorisation **Secrets : Read and write**, ou ne vise pas ce
+dépôt. Refaites-le.
+
+**Apple refuse de créer un certificat de plus** — Vous en avez déjà trois. Relancez
+l'étape 4 en cochant la case de révocation.
 
 **L'envoi dit que le build existe déjà** — Deux constructions ont porté le même numéro.
 Relancez : le numéro suit le compteur GitHub et s'incrémente seul.

@@ -19,7 +19,7 @@ Budget de fonctionnement : de l'ordre de 25 € par mois tout compris, iCloud in
 
 ---
 
-> **Vous partez de zéro ?** Suivez `ACHATS_ET_CLES.md`, qui va dans l'ordre : d'abord tout ce qu'il faut pour **construire et installer** l'app (Apple et GitHub, aucune clé d'IA), ensuite, l'app une fois sur l'iPhone, tout ce qu'il faut **y mettre** (clés Gemini et Perplexity, dossier iCloud). Les étapes 1 à 8 puis 9 à 14.
+> **Vous partez de zéro ?** Suivez `ACHATS_ET_CLES.md`, qui va dans l'ordre : d'abord **construire et installer** l'app (Apple et GitHub, **aucun Mac nécessaire**, aucune clé d'IA — étapes 0 à 7), ensuite, l'app une fois sur l'iPhone, tout ce qu'il faut **y mettre** (dossier iCloud, clés Gemini et Perplexity — étapes 8 à 13).
 
 ## 2. Installer l'app sur vos appareils
 
@@ -29,6 +29,8 @@ Budget de fonctionnement : de l'ordre de 25 € par mois tout compris, iCloud in
 2. Dans la colonne de gauche, cliquez sur le projet **Atelier** (tout en haut), puis sur la cible **Atelier**, onglet **Signing & Capabilities**.
 3. Cochez **Automatically manage signing** et choisissez votre **Team** dans le menu déroulant.
 4. L'identifiant est `com.bureau.latelier`. Si Xcode se plaint qu'il est déjà utilisé, changez **Bundle Identifier** en quelque chose d'unique, par exemple `com.votrenom.latelier`.
+
+> Cette section suppose un Mac. **Sans Mac, tout se fait depuis GitHub** : voir `ACHATS_ET_CLES.md`.
 
 **Pour chaque appareil :**
 
@@ -202,7 +204,8 @@ L'abonnement Apple Developer à 99 € par an n'entre pas dans ce compte, et l'a
 | Fichier | À quoi il sert |
 |---|---|
 | `ACHATS_ET_CLES.md` | Dans l'ordre : construire et installer l'app, puis ce qu'il faut y mettre |
-| `Tools/preparer-secrets.sh` | Demande les quatre pièces Apple une par une, les vérifie, et dépose les huit secrets GitHub |
+| `.github/workflows/signature.yml` | Crée le certificat et le profil chez Apple, sans Mac, et dépose les secrets |
+| `Tools/apple_signature.py` | Les appels à l'API App Store Connect employés par ce flux |
 | `CHECKLIST_APPAREIL.md` | Ce que vous devez vérifier vous-même, dans l'ordre, sur iPhone et iPad |
 | `.github/workflows/build.yml` | Compile à chaque envoi de code et affiche les erreurs — aucun secret nécessaire |
 | `.github/workflows/testflight.yml` | Construit, signe et dépose une version sur TestFlight, sur demande |

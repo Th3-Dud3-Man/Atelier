@@ -5,6 +5,10 @@ name: TestFlight
 # Ce flux ne touche JAMAIS à vos clés Gemini ou Perplexity : elles vivent dans le trousseau
 # de l'iPhone, saisies par vous dans les réglages de l'app, et n'ont rien à faire ici.
 # Les secrets ci-dessous ne servent qu'à Apple : signer l'app et la déposer sur TestFlight.
+#
+# Il attend les secrets créés par le flux « Préparer la signature » : SIGNING_KEY_PEM,
+# SIGNING_CERT_PEM, PROVISIONING_PROFILE_BASE64, APPLE_TEAM_ID — plus ASC_KEY_ID,
+# ASC_ISSUER_ID et ASC_PRIVATE_KEY, que vous avez déposés à la main.
 on:
   workflow_dispatch:
     inputs:
@@ -31,29 +35,53 @@ jobs:
           sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
           xcodebuild -version
 
-      # Le certificat et le profil arrivent en base64 depuis les secrets, sont posés dans un
-      # trousseau temporaire créé pour ce seul travail, et disparaissent avec la machine.
+      # L'identité de signature est reconstituée ici, sur le Mac, à partir de la clé et du
+      # certificat créés par le flux « Préparer la signature ». Elle est montée dans un
+      # trousseau temporaire, propre à cette exécution, effacé à la fin.
       - name: Installer le certificat et le profil de distribution
         env:
-          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
-          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          SIGNING_KEY_PEM: ${{ secrets.SIGNING_KEY_PEM }}
+          SIGNING_CERT_PEM: ${{ secrets.SIGNING_CERT_PEM }}
           PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           set -euo pipefail
-          CERT_PATH="$RUNNER_TEMP/certificat.p12"
+          umask 077
+          if [ -z "${SIGNING_KEY_PEM:-}" ] || [ -z "${SIGNING_CERT_PEM:-}" ]; then
+            echo "::error::Les secrets de signature manquent. Lancez d'abord le flux "\
+                 "« Préparer la signature » : il les crée et les dépose lui-même."
+            exit 1
+          fi
+
+          KEY_PATH="$RUNNER_TEMP/cle.pem"
+          CERT_PATH="$RUNNER_TEMP/certificat.pem"
+          P12_PATH="$RUNNER_TEMP/identite.p12"
           PROFILE_PATH="$RUNNER_TEMP/profil.mobileprovision"
           KEYCHAIN_PATH="$RUNNER_TEMP/signature.keychain-db"
+          # Ni le mot de passe du .p12 ni celui du trousseau n'ont à survivre à l'exécution :
+          # ils sont tirés au sort ici et oubliés avec la machine.
+          P12_PASSWORD="$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)"
+          KEYCHAIN_PASSWORD="$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)"
 
-          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERT_PATH"
-          echo -n "$PROVISIONING_PROFILE_BASE64" | base64 --decode -o "$PROFILE_PATH"
+          printf '%s' "$SIGNING_KEY_PEM" > "$KEY_PATH"
+          printf '%s' "$SIGNING_CERT_PEM" > "$CERT_PATH"
+          printf '%s' "$PROVISIONING_PROFILE_BASE64" | base64 --decode -o "$PROFILE_PATH"
+
+          # Le .p12 est assemblé par l'openssl livré avec macOS — /usr/bin/openssl, qui est
+          # LibreSSL. C'est délibéré : un OpenSSL 3 installé par Homebrew produirait une
+          # enveloppe chiffrée autrement, que « security import » peut refuser.
+          OPENSSL=/usr/bin/openssl
+          [ -x "$OPENSSL" ] || OPENSSL=openssl
+          "$OPENSSL" pkcs12 -export \
+            -inkey "$KEY_PATH" -in "$CERT_PATH" \
+            -name "L'Atelier" -passout "pass:$P12_PASSWORD" -out "$P12_PATH"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security import "$P12_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
           security list-keychain -d user -s "$KEYCHAIN_PATH"
+          rm -f "$KEY_PATH" "$CERT_PATH" "$P12_PATH"
 
           # Xcode cherche les profils à cet endroit précis, sous leur UUID.
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"

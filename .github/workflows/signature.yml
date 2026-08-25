@@ -1,0 +1,91 @@
+name: Préparer la signature
+
+# À lancer UNE FOIS, avant la première mise sur TestFlight, puis chaque année quand le
+# certificat expire. Ce flux crée chez Apple le certificat de distribution et le profil,
+# et dépose lui-même les quatre secrets dont la construction a besoin.
+#
+# Aucun Mac n'est nécessaire : tout passe par l'API App Store Connect, depuis Linux.
+# La clé privée du certificat est fabriquée ici et ne sort jamais de l'exécution :
+# elle va directement dans les secrets du dépôt, sans jamais être affichée.
+on:
+  workflow_dispatch:
+    inputs:
+      revoquer_ancien:
+        description: "Révoquer le plus ancien certificat de distribution (si Apple refuse d'en créer un de plus)"
+        type: boolean
+        default: false
+
+jobs:
+  signature:
+    name: Créer le certificat et le profil
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer de quoi signer le jeton
+        run: pip install --quiet "pyjwt[crypto]"
+
+      - name: Fabriquer la clé privée et la demande de certificat
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/signature"
+          openssl genrsa -out "$RUNNER_TEMP/signature/cle.pem" 2048
+          openssl req -new -sha256 \
+            -key "$RUNNER_TEMP/signature/cle.pem" \
+            -out "$RUNNER_TEMP/signature/demande.csr" \
+            -subj "/CN=L Atelier/O=L Atelier/C=FR"
+          echo "Clé et demande de certificat prêtes."
+
+      - name: Demander le certificat et le profil à Apple
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          BUNDLE_ID: com.bureau.latelier
+          PROFILE_NAME: Atelier App Store
+          REVOKE_OLDEST: ${{ inputs.revoquer_ancien }}
+        run: |
+          set -euo pipefail
+          CSR_PATH="$RUNNER_TEMP/signature/demande.csr" \
+          OUT_DIR="$RUNNER_TEMP/signature" \
+          python3 Tools/apple_signature.py
+
+      - name: Déposer les secrets sur le dépôt
+        env:
+          GH_TOKEN: ${{ secrets.GH_SECRETS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::Le secret GH_SECRETS_TOKEN manque : sans lui, ce flux ne peut pas "\
+                 "écrire les secrets. Créez un jeton d'accès personnel à portée restreinte, "\
+                 "avec l'autorisation « Secrets : lecture et écriture » sur ce dépôt."
+            exit 1
+          fi
+          D="$RUNNER_TEMP/signature"
+          gh secret set SIGNING_KEY_PEM             --repo "$GITHUB_REPOSITORY" < "$D/cle.pem"
+          gh secret set SIGNING_CERT_PEM            --repo "$GITHUB_REPOSITORY" < "$D/certificat.pem"
+          gh secret set PROVISIONING_PROFILE_BASE64 --repo "$GITHUB_REPOSITORY" < "$D/profil.base64"
+          gh secret set PROVISIONING_PROFILE_NAME   --repo "$GITHUB_REPOSITORY" < "$D/profil-nom.txt"
+          gh secret set APPLE_TEAM_ID               --repo "$GITHUB_REPOSITORY" < "$D/equipe.txt"
+          echo "Cinq secrets déposés."
+
+      - name: Effacer les pièces
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/signature"
+
+      - name: Et maintenant
+        run: |
+          {
+            echo "## La signature est prête"
+            echo
+            echo "Le certificat et le profil existent chez Apple, et les cinq secrets sont"
+            echo "déposés sur ce dépôt. Vous n'avez plus rien à faire ici."
+            echo
+            echo "**Étape suivante :** onglet **Actions** → flux **TestFlight** →"
+            echo "**Run workflow**."
+            echo
+            echo "Ce flux-ci n'est à relancer que dans un an, quand le certificat expirera."
+          } >> "$GITHUB_STEP_SUMMARY"
