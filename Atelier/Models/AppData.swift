@@ -29,6 +29,9 @@ struct AppSettings: Codable, Sendable {
     /// Niveau 3 du Smart Search : indexer et relancer sans rien demander.
     var autoIndexSuggested: Bool = true
     var prices: PriceTable = .current
+    /// Modèles que la clé peut réellement employer, relevés auprès de Google.
+    /// Vide tant que « Enregistrer et tester » n'a pas été touché.
+    var availableModels: [GeminiModels.Info] = []
 
     init() {}
 
@@ -52,6 +55,8 @@ struct AppSettings: Codable, Sendable {
         autoIndexSuggested = try box.decodeIfPresent(Bool.self, forKey: .autoIndexSuggested)
             ?? base.autoIndexSuggested
         prices = try box.decodeIfPresent(PriceTable.self, forKey: .prices) ?? base.prices
+        availableModels = try box.decodeIfPresent([GeminiModels.Info].self,
+                                                  forKey: .availableModels) ?? []
     }
 }
 

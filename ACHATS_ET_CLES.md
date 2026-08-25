@@ -187,6 +187,12 @@ produit dont l'app n'a pas besoin.*
 > Le test Perplexity effectue une vraie recherche, facturée un demi-centime. C'est le seul
 > moyen honnête de vérifier qu'une clé marche.
 
+Le test Gemini fait deux choses : il demande à Google la liste des modèles que **votre**
+clé peut employer, et il remplace ceux qui n'existent plus. Le catalogue de Google change
+souvent ; sans cela, un identifiant périmé se manifesterait par un « ressource introuvable
+(erreur 404) » qui ne dit pas quoi faire. Si l'app vous annonce un modèle corrigé, c'est
+normal, et c'est réglé.
+
 5. Fermez complètement l'app, rouvrez-la, revenez aux réglages : **les clés doivent
    toujours être là**. Si elles ont disparu, dites-le-moi.
 

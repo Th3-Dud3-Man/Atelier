@@ -22,6 +22,13 @@ Google a publié une nouvelle API « Interactions » (`POST /v1beta/interactions
 
 ### 1.2 Quels modèles
 
+> **Relevé sur le terrain, 25/08/2026 :** avec une vraie clé, `gemini-2.5-flash-lite`
+> renvoie **404 — ressource introuvable**. Les identifiants ci-dessous viennent de la
+> documentation mais ne valent pas pour toutes les clés, et le catalogue bouge. L'app ne
+> s'y fie donc plus : elle interroge `GET /v1beta/models` (champs `name`, `displayName`,
+> `supportedGenerationMethods`) et remplace d'elle-même un identifiant qui n'y figure pas.
+> La liste qui suit ne sert plus que d'ordre de préférence. ✅
+
 La documentation liste **exactement 7 modèles compatibles avec l'outil File Search** : Gemini 3.7 Flash, 3.6 Flash, 3.5 Flash-Lite, 3.5 Flash, 3.1 Pro Preview, 3.1 Flash-Lite, 3 Flash Preview. ✅
 
 Conséquence importante pour le budget : **`gemini-2.5-flash-lite`, le modèle le moins cher, ne sait pas faire File Search.** Le moins cher qui le sache est `gemini-3.1-flash-lite`.

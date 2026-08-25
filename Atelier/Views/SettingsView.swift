@@ -184,11 +184,51 @@ struct SettingsView: View {
             storeName: store.settings.storeName
         )
         if Keychain.has(.gemini) {
+            // On demande d'abord à Google ce que cette clé peut employer. Sans cela, un
+            // identifiant de modèle devenu faux se manifeste par un « 404 » qui ne dit pas
+            // lequel prendre à la place — et l'app paraît cassée alors que la clé est bonne.
+            var usable: [String] = []
             do {
-                _ = try await client.testKey()
-                lines.append("Gemini : la clé fonctionne.")
+                let models = try await client.listModels()
+                store.updateSettings { $0.availableModels = models }
+                usable = models.filter(\.canGenerate).map(\.id)
+                lines.append("Gemini : la clé est reconnue, \(usable.count) modèle(s) disponibles.")
             } catch {
                 lines.append("Gemini : \((error as? APIError)?.errorDescription ?? error.localizedDescription)")
+            }
+
+            if !usable.isEmpty {
+                var corrected: [String] = []
+                if !usable.contains(store.settings.mainModel),
+                   let replacement = GeminiModels.bestMain(from: usable) {
+                    let previous = store.settings.mainModel
+                    store.updateSettings { $0.mainModel = replacement }
+                    corrected.append("recherche : « \(previous) » n'existe plus, remplacé par « \(replacement) »")
+                }
+                if !usable.contains(store.settings.lightModel),
+                   let replacement = GeminiModels.bestLight(from: usable) {
+                    let previous = store.settings.lightModel
+                    store.updateSettings { $0.lightModel = replacement }
+                    corrected.append("analyse : « \(previous) » n'existe plus, remplacé par « \(replacement) »")
+                }
+                if !corrected.isEmpty {
+                    lines.append(contentsOf: corrected.map { "Modèle corrigé — \($0)." })
+                }
+
+                // Puis l'essai qui compte : un vrai appel, avec le modèle retenu.
+                let checked = GeminiClient(
+                    apiKey: Keychain.get(.gemini),
+                    mainModel: store.settings.mainModel,
+                    lightModel: store.settings.lightModel,
+                    storeName: store.settings.storeName
+                )
+                do {
+                    _ = try await checked.testKey()
+                    lines.append("Gemini : « \(store.settings.lightModel) » répond.")
+                } catch {
+                    lines.append("Gemini : « \(store.settings.lightModel) » a refusé — "
+                                 + "\((error as? APIError)?.errorDescription ?? error.localizedDescription)")
+                }
             }
         } else {
             lines.append("Gemini : aucune clé enregistrée.")
@@ -218,14 +258,20 @@ struct SettingsView: View {
                 get: { store.settings.mainModel },
                 set: { value in store.updateSettings { $0.mainModel = value } }
             )) {
-                ForEach(GeminiModels.fileSearchCapable, id: \.self) { Text($0).tag($0) }
+                ForEach(offeredModels(preferring: GeminiModels.fileSearchCapable,
+                                      current: store.settings.mainModel), id: \.self) {
+                    Text($0).tag($0)
+                }
             }
 
             Picker("Analyse et transcription", selection: Binding(
                 get: { store.settings.lightModel },
                 set: { value in store.updateSettings { $0.lightModel = value } }
             )) {
-                ForEach(GeminiModels.lightCapable, id: \.self) { Text($0).tag($0) }
+                ForEach(offeredModels(preferring: GeminiModels.lightCapable,
+                                      current: store.settings.lightModel), id: \.self) {
+                    Text($0).tag($0)
+                }
             }
 
             Picker("Niveau Internet par défaut", selection: Binding(
@@ -244,9 +290,28 @@ struct SettingsView: View {
         } header: {
             Text("Modèles")
         } footer: {
-            Text("Seuls sept modèles Gemini savent utiliser File Search ; les moins chers n'en font "
-                 + "pas partie. Le modèle d'analyse, lui, peut être le plus économique du catalogue.")
+            Text(store.settings.availableModels.isEmpty
+                 ? "Cette liste est celle de la documentation. Touchez « Enregistrer et tester » "
+                   + "plus haut : l'app demandera à Google les modèles que votre clé peut vraiment "
+                   + "employer, et remplacera ceux qui n'existent plus."
+                 : "Liste relevée auprès de Google pour votre clé : \(store.settings.availableModels.count) "
+                   + "modèle(s). Tous ne savent pas utiliser File Search — si la recherche dans vos "
+                   + "fichiers échoue, essayez le suivant dans la liste.")
         }
+    }
+
+    /// Ce que proposent les listes déroulantes : les modèles réellement disponibles quand la
+    /// clé a été testée, l'ordre de préférence écrit dans le code sinon. Le modèle actuellement
+    /// choisi y figure toujours, même s'il a disparu du catalogue, pour ne pas vider la liste.
+    private func offeredModels(preferring order: [String], current: String) -> [String] {
+        let available = store.settings.availableModels.filter(\.canGenerate).map(\.id)
+        guard !available.isEmpty else { return order.contains(current) ? order : [current] + order }
+        let known = order.filter(available.contains)
+        let rest = available.filter { !known.contains($0) }.sorted()
+        let list = known + rest
+        // Un modèle choisi mais disparu du catalogue reste en tête : sans lui, la liste
+        // n'aurait plus de sélection valide et se viderait à l'écran.
+        return list.contains(current) ? list : [current] + list
     }
 
     // ── Budget ───────────────────────────────────────────────────────

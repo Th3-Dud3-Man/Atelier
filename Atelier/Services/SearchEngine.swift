@@ -924,7 +924,15 @@ final class SearchEngine {
         guard isCurrent(runID) else { return }
         phase = .failed
         statusText = ""
-        let message = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        var message = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        // Un 404 de Gemini ne parle jamais du modèle : il dit « ressource introuvable ».
+        // Neuf fois sur dix c'est pourtant cela, et l'utilisateur n'a aucun moyen de le
+        // deviner. On lui donne le geste qui répare.
+        if let api = error as? APIError, api.status == 404, api.provider == "Gemini" {
+            message += "\n\nLe modèle « \(store.settings.mainModel) » n'existe peut-être plus au "
+                + "catalogue de Google. Ouvrez les réglages et touchez « Enregistrer et tester » : "
+                + "l'app relèvera les modèles que votre clé peut employer et corrigera celui-ci."
+        }
         errorText = message
         mutate(runID) { current in
             current.status = current.synthesis.isEmpty ? .failed : .partial

@@ -725,6 +725,53 @@ struct GeminiClient: Sendable {
         ))
         return reply.text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    // ── Modèles réellement disponibles ───────────────────────────────
+
+    private struct ModelList: Decodable {
+        struct Entry: Decodable {
+            var name: String?
+            var displayName: String?
+            var supportedGenerationMethods: [String]?
+        }
+        var models: [Entry]?
+        var nextPageToken: String?
+    }
+
+    /// Demande à Google la liste des modèles que **cette clé** peut employer.
+    ///
+    /// C'est la seule source de vérité : une liste écrite dans le code vieillit, et un
+    /// identifiant devenu faux ne se manifeste que par une erreur 404 au premier appel,
+    /// sans dire lequel employer à la place.
+    /// `GET /v1beta/models` — champs `name`, `displayName`, `supportedGenerationMethods`.
+    func listModels() async throws -> [GeminiModels.Info] {
+        var found: [GeminiModels.Info] = []
+        var pageToken: String?
+        // Trois pages au plus : le catalogue en compte quelques dizaines, jamais des milliers.
+        for _ in 0..<3 {
+            var path = "/v1beta/models?pageSize=200"
+            if let pageToken, !pageToken.isEmpty {
+                let escaped = pageToken.addingPercentEncoding(
+                    withAllowedCharacters: .urlQueryAllowed
+                ) ?? pageToken
+                path += "&pageToken=\(escaped)"
+            }
+            let (data, _) = try await HTTP.send(request(path: path), provider: "Gemini", attempts: 2)
+            let page = try JSONDecoder().decode(ModelList.self, from: data)
+            for entry in page.models ?? [] {
+                guard let name = entry.name, !name.isEmpty else { continue }
+                let identifier = name.hasPrefix("models/") ? String(name.dropFirst(7)) : name
+                found.append(GeminiModels.Info(
+                    id: identifier,
+                    displayName: entry.displayName ?? identifier,
+                    supportedMethods: entry.supportedGenerationMethods ?? []
+                ))
+            }
+            pageToken = page.nextPageToken
+            if pageToken == nil || pageToken?.isEmpty == true { break }
+        }
+        return found
+    }
 }
 
 /// Valeur JSON quelconque, pour lire les rares champs dont la forme n'est pas documentée

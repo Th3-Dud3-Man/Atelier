@@ -52,6 +52,22 @@ taxed.usdToEur = 0.50
 check("les totaux se lisent en euros",
       CostModel.formatEUR(10, prices: taxed) == "5,00 €")
 
+print("\nChoix d'un modèle dans ce que la clé propose vraiment :")
+check("le modèle connu le moins cher est retenu quand il existe",
+      GeminiModels.bestMain(from: ["gemini-3.5-flash", "gemini-3.1-flash-lite", "autre"])
+        == "gemini-3.1-flash-lite")
+check("aucun modèle connu : on retient un « flash lite » plausible",
+      GeminiModels.bestMain(from: ["gemini-9-pro", "gemini-9-flash-lite", "gemini-9-flash"])
+        == "gemini-9-flash-lite")
+check("les aperçus passent après les modèles stables",
+      GeminiModels.bestMain(from: ["gemini-9-flash-preview", "gemini-9-flash"]) == "gemini-9-flash")
+check("les modèles d'embedding ne sont jamais proposés",
+      GeminiModels.bestMain(from: ["gemini-embedding-001"]) == nil)
+check("catalogue vide : aucun choix, et l'app doit le dire",
+      GeminiModels.bestMain(from: []) == nil)
+check("le modèle léger tombe sur le principal si rien de plus économique n'existe",
+      GeminiModels.bestLight(from: ["gemini-3.1-flash-lite"]) == "gemini-3.1-flash-lite")
+
 print("\nUn fichier de réglages écrit par une version antérieure :")
 let older = Data(#"{"updatedOn":"2026-01-01","geminiInput":{},"geminiOutput":{},"geminiAudioInput":{},"embeddingPerMillion":0.15,"perplexitySearchPer1000":5.0,"perplexityAgentPerRequest":0.05}"#.utf8)
 if let restored = try? JSONDecoder().decode(PriceTable.self, from: older) {
