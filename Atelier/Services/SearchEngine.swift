@@ -519,16 +519,10 @@ final class SearchEngine {
     // ── Appels ───────────────────────────────────────────────────────
 
     private func analyze(question: String, runID: String) async throws -> QueryAnalysis {
-        let unindexed = store.files
-            .filter { $0.status == .cataloged }
-            .sorted { $0.modified > $1.modified }
-            .prefix(300)
-            .map(\.name)
-
         let prompt = Prompts.analysisPrompt(
             question: question,
             recent: Array(store.searches.filter { $0.status == .done && $0.id != runID }.prefix(30)),
-            unindexedNames: Array(unindexed)
+            unindexedNames: catalogueShortlist(for: question)
         )
 
         let result = try await gemini.generateJSON(
@@ -539,6 +533,47 @@ final class SearchEngine {
         recordCost(runID: runID, provider: "Gemini", model: result.model, usage: result.usage, note: "analyse")
         let json = GeminiClient.parseJSONObject(result.text) ?? [:]
         return Self.decodeAnalysis(json, fallbackQuery: question)
+    }
+
+    /// Noms de fichiers catalogués soumis à l'analyse — au plus trois cents.
+    ///
+    /// Sur un corpus plus gros que le budget, le catalogue peut compter des dizaines de milliers
+    /// d'entrées : envoyer les trois cents plus récentes reviendrait à ne jamais montrer le bon
+    /// fichier. On rapproche donc d'abord les mots de la question du **chemin** de chaque fichier
+    /// — un simple filtrage de texte sur une liste déjà en mémoire, sans index ni empreinte — puis
+    /// on complète avec les plus récents si la place le permet.
+    private func catalogueShortlist(for question: String, limit: Int = 300) -> [String] {
+        let cataloged = store.files.filter { $0.status == .cataloged }
+        guard cataloged.count > limit else {
+            return cataloged.sorted { $0.modified > $1.modified }.map(\.name)
+        }
+
+        let words = Dedupe.keywords(question)
+        var matched: [(entry: FileEntry, score: Int)] = []
+        if !words.isEmpty {
+            for entry in cataloged {
+                let haystack = Dedupe.foldedPath(entry.relativePath)
+                let score = words.reduce(into: 0) { total, word in
+                    if haystack.contains(word) { total += 1 }
+                }
+                if score > 0 { matched.append((entry, score)) }
+            }
+        }
+
+        var shortlist = matched
+            .sorted { ($0.score, $0.entry.modified) > ($1.score, $1.entry.modified) }
+            .prefix(limit)
+            .map(\.entry)
+
+        if shortlist.count < limit {
+            let chosen = Set(shortlist.map(\.id))
+            let filler = cataloged
+                .filter { !chosen.contains($0.id) }
+                .sorted { $0.modified > $1.modified }
+                .prefix(limit - shortlist.count)
+            shortlist.append(contentsOf: filler)
+        }
+        return shortlist.map(\.name)
     }
 
     static func decodeAnalysis(_ json: [String: Any], fallbackQuery: String) -> QueryAnalysis {

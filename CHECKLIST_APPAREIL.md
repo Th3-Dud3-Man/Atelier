@@ -49,6 +49,12 @@ Suivez-la dans l'ordre. À chaque étape : ce qu'il faut voir, et quoi faire sin
 
 ## Étape 3 — Les clés
 
+**Avant tout : la facturation doit être activée sur le projet Google.** Ouvrez Google AI Studio,
+vérifiez que la clé Gemini appartient à un projet Cloud avec un moyen de paiement. Ce n'est pas
+qu'une question de quota : sur l'offre gratuite, les conditions d'utilisation autorisent Google à
+lire vos documents, à les faire relire par des humains et à s'en servir pour améliorer ses produits,
+et le corpus y est plafonné à 1 Go. Avec la facturation activée, ces deux points tombent.
+
 11. Horloge (en haut à gauche) → engrenage (en haut à droite).
 12. Collez la clé Gemini. Collez la clé Perplexity si vous en avez une.
 13. **Enregistrer et tester**.
@@ -82,6 +88,20 @@ Suivez-la dans l'ordre. À chaque étape : ce qu'il faut voir, et quoi faire sin
 18. **Le test qui compte** : ajoutez un document dans ce dossier depuis votre Mac, attendez qu'iCloud le synchronise, mettez l'app en arrière-plan puis revenez-y.
 
 **Attendu :** le nouveau fichier apparaît et s'indexe seul, sans rien faire.
+
+18 bis. **Si votre corpus dépasse le budget** (le cas d'un dossier de plus de 3 Go) : laissez le
+scan aller jusqu'au bout, puis regardez l'en-tête de la section *Indexés* dans **Mes fichiers**.
+
+**Attendu :** « Indexés (N) — 3 Go sur 3 Go », un message expliquant que le reste attend au
+catalogue, et **aucune erreur**. Les fichiers catalogués doivent rester nombreux et visibles.
+
+**Puis le vrai test :** posez une question dont la réponse se trouve dans un fichier **catalogué et
+non indexé**. L'app doit annoncer « … a été ajouté à l'index », faire la place en retirant un
+document plus ancien, et répondre en citant le bon fichier. Si elle répond « je ne trouve pas »
+alors que le fichier existe, dites-le-moi : c'est le niveau 3 qui n'a pas fonctionné.
+
+Le budget se règle dans **Réglages › Corpus**. Montez-le si vous voulez indexer davantage, en
+gardant à l'esprit que 3 Go de documents occupent déjà les 10 Go que Google accorde.
 
 ---
 

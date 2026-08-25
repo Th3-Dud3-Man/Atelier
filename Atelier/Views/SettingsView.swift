@@ -34,6 +34,7 @@ struct SettingsView: View {
                 keysSection
                 modelsSection
                 budgetSection
+                corpusSection
                 privacySection
                 dataSection
                 diagnosticsSection
@@ -277,6 +278,55 @@ struct SettingsView: View {
         }
     }
 
+    // ── Corpus ───────────────────────────────────────────────────────
+
+    private var corpusSection: some View {
+        Section {
+            LabeledContent("Corpus indexé") {
+                Text(store.corpusUsageText)
+                    .foregroundStyle(store.corpusFull ? Color.orange : Color.secondary)
+            }
+            Gauge(value: gaugeFraction) { EmptyView() }
+                .tint(store.corpusFull ? Color.orange : Color.atelierAccent)
+
+            Stepper(
+                "Budget : \(budgetGigabytes) Go",
+                value: Binding(
+                    get: { budgetGigabytes },
+                    set: { value in
+                        store.updateSettings { $0.corpusBudgetBytes = Int64(value) * 1024 * 1024 * 1024 }
+                    }
+                ),
+                in: 1...30,
+                step: 1
+            )
+
+            LabeledContent("Au catalogue") { Text("\(store.catalogedFiles.count) fichier(s)") }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        } header: {
+            Text("Corpus")
+        } footer: {
+            Text("Google plafonne un corpus à 10 Go, et l'empreinte réelle d'un document y vaut "
+                 + "environ trois fois sa taille : trois giga-octets de fichiers remplissent donc "
+                 + "déjà ce plafond.\n\n"
+                 + "Au-delà du budget, les fichiers restent au catalogue : ils gardent leur nom, "
+                 + "restent cherchables, ne coûtent rien, et entrent dans le corpus au moment où "
+                 + "une question les concerne — en prenant la place du document indexé le plus "
+                 + "ancien. L'index est un plan de travail, pas une copie de votre disque.")
+        }
+    }
+
+    private var budgetGigabytes: Int {
+        max(1, Int(store.corpusBudgetBytes / (1024 * 1024 * 1024)))
+    }
+
+    private var gaugeFraction: Double {
+        let budget = Double(store.corpusBudgetBytes)
+        guard budget > 0 else { return 0 }
+        return min(1, Double(store.indexedBytes) / budget)
+    }
+
     // ── Confidentialité ──────────────────────────────────────────────
 
     private var privacySection: some View {
@@ -294,7 +344,12 @@ struct SettingsView: View {
         } footer: {
             Text("Vos documents ne sont envoyés qu'à Google, pour l'indexation et la recherche. "
                  + "Perplexity ne reçoit que la question reformulée, jamais un extrait de vos fichiers. "
-                 + "Rien d'autre ne sort de l'appareil.")
+                 + "Rien d'autre ne sort de l'appareil.\n\n"
+                 + "Un point important : la clé Gemini doit venir d'un projet Google Cloud où la "
+                 + "facturation est activée. Sur l'offre gratuite, les conditions d'utilisation de "
+                 + "l'API autorisent Google à lire vos documents, à les faire relire par des humains "
+                 + "et à s'en servir pour améliorer ses produits. Dès que la facturation est activée, "
+                 + "cela s'arrête : vos fichiers ne servent plus qu'à vous répondre.")
         }
     }
 

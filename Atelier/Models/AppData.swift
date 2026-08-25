@@ -12,6 +12,12 @@ struct AppSettings: Codable, Sendable {
     var webLevel: WebLevel = .standard
     var priority: SourcePriority = .filesFirst
     var monthlyCapUSD: Double = 15
+    /// Budget du corpus indexé, en octets **bruts**. Google plafonne un store à 10 Go au palier 1,
+    /// et l'empreinte réelle vaut environ trois fois la taille des données brutes : trois giga-octets
+    /// de documents remplissent donc déjà ce quota. Au-delà du budget, les fichiers restent au
+    /// catalogue — cherchables par leur nom, gratuits — et entrent dans le corpus à la demande,
+    /// en prenant la place des plus anciennement indexés.
+    var corpusBudgetBytes: Int64 = 3 * 1024 * 1024 * 1024
     /// Mois déjà signalé à 80 % du plafond, pour ne prévenir qu'une fois.
     var alerted80Month: String = ""
     var dictationHintShown: Bool = false
@@ -221,6 +227,24 @@ final class AppStore {
     var folders: [WatchedFolder] { data.folders }
 
     var indexedFiles: [FileEntry] { data.files.filter { $0.status == .indexed } }
+
+    /// Octets bruts déjà envoyés au corpus, et ce qu'il reste du budget.
+    var indexedBytes: Int64 {
+        data.files.reduce(into: Int64(0)) { total, file in
+            if file.status == .indexed { total += file.size }
+        }
+    }
+    var corpusBudgetBytes: Int64 { data.settings.corpusBudgetBytes }
+    var corpusRemainingBytes: Int64 { max(0, corpusBudgetBytes - indexedBytes) }
+    var corpusFull: Bool { indexedBytes >= corpusBudgetBytes }
+
+    /// « 1,2 Go sur 3 Go ». Une seule formulation, employée partout.
+    var corpusUsageText: String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return "\(formatter.string(fromByteCount: indexedBytes)) sur "
+            + "\(formatter.string(fromByteCount: corpusBudgetBytes))"
+    }
     var catalogedFiles: [FileEntry] { data.files.filter { $0.status != .indexed } }
 
     func file(id: String) -> FileEntry? { data.files.first { $0.id == id } }

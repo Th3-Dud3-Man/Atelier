@@ -175,7 +175,14 @@ struct FilesView: View {
     }
 
     private var indexedSection: some View {
-        Section("Indexés (\(indexed.count))") {
+        Section("Indexés (\(indexed.count)) — \(store.corpusUsageText)") {
+            if store.corpusFull {
+                Text("Le corpus est plein. Les fichiers suivants restent au catalogue et "
+                     + "entreront à la demande, en prenant la place des plus anciens. "
+                     + "Le budget se règle dans les réglages.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             if indexed.isEmpty {
                 Text("Aucun fichier indexé ne correspond.")
                     .font(.footnote).foregroundStyle(.secondary)

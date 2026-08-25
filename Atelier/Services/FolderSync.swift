@@ -209,7 +209,11 @@ final class FolderSync: FileIndexing {
     func indexPending() async {
         // `needsIndexing` couvre aussi les échecs précédents : un fichier en erreur, souvent un
         // téléchargement iCloud qui n'était pas terminé, doit être réessayé au scan suivant.
-        let pending = store.files.filter { $0.needsIndexing && SupportedTypes.isSupported($0.name) }
+        // Les plus récents d'abord : quand le corpus est plus gros que le budget, ce sont eux
+        // qui méritent la place.
+        let pending = store.files
+            .filter { $0.needsIndexing && SupportedTypes.isSupported($0.name) }
+            .sorted { $0.modified > $1.modified }
         guard !pending.isEmpty else { return }
 
         guard !Keychain.get(.gemini).isEmpty else {
@@ -223,6 +227,13 @@ final class FolderSync: FileIndexing {
         guard await ensureStore() else { return }
 
         var done = 0
+        var skipped = 0
+        // Compteur courant plutôt qu'une somme recalculée à chaque fichier : sur un corpus de
+        // plusieurs milliers d'entrées, la seconde solution deviendrait le poste le plus lourd
+        // du scan.
+        var used = store.indexedBytes
+        let budget = store.corpusBudgetBytes
+
         for entry in pending {
             if Task.isCancelled { return }
             // Le plafond peut être franchi en cours de lot : chaque fichier a son coût.
@@ -230,12 +241,27 @@ final class FolderSync: FileIndexing {
                 lastError = capMessage
                 return
             }
+            // Budget du corpus : le fichier qui n'y tient pas reste au catalogue, sans erreur.
+            // Il reste cherchable par son nom et pourra entrer à la demande, lors d'une question
+            // qui le concerne vraiment.
+            if entry.size > 0, used + entry.size > budget {
+                skipped += 1
+                continue
+            }
             done += 1
             progressText = "Indexation \(done) / \(pending.count) — \(entry.name)"
-            await index(entry)
+            if await index(entry) {
+                used += store.file(id: entry.id)?.size ?? entry.size
+            }
         }
         await reconcileDocumentNames()
         progressText = nil
+
+        if skipped > 0 {
+            lastError = "Le corpus est plein (\(store.corpusUsageText)) : \(skipped) fichier(s) "
+                + "restent au catalogue. Ils sont cherchables par leur nom et seront indexés "
+                + "à la demande, lorsqu'une question les concernera."
+        }
     }
 
     /// Google ne renvoie pas toujours le nom du document créé. Plutôt que de lister le corpus
@@ -273,12 +299,44 @@ final class FolderSync: FileIndexing {
               SupportedTypes.isSupported(entry.name),
               entry.size <= SupportedTypes.maxFileBytes
         else { return false }
+        guard await makeRoom(for: entry) else { return false }
         guard await ensureStore() else { return false }
         let indexed = await index(entry)
         if indexed, (store.file(id: fileID)?.storeDocumentName ?? "").isEmpty {
             await reconcileDocumentNames()
         }
         return indexed
+    }
+
+    /// Fait de la place dans le corpus pour un fichier demandé à la volée.
+    ///
+    /// Sur un corpus plus gros que le budget, le catalogue est complet mais l'index est un
+    /// **plan de travail** : les documents les plus anciennement indexés cèdent leur place à
+    /// celui dont on a besoin maintenant. Ils reviendront de la même façon si une question les
+    /// rappelle ; seule leur réindexation sera refacturée, quelques centimes tout au plus.
+    private func makeRoom(for entry: FileEntry) async -> Bool {
+        let budget = store.corpusBudgetBytes
+        let needed = max(entry.size, 0)
+        guard needed <= budget else { return false }
+
+        var used = store.indexedBytes
+        guard used + needed > budget else { return true }
+
+        let candidates = store.indexedFiles
+            .filter { $0.id != entry.id }
+            .sorted { ($0.indexedAt ?? .distantPast) < ($1.indexedAt ?? .distantPast) }
+
+        for victim in candidates {
+            progressText = "Le corpus est plein : « \(victim.name) » lui cède sa place…"
+            await unindex(victim)
+            used -= victim.size
+            if used + needed <= budget {
+                progressText = nil
+                return true
+            }
+        }
+        progressText = nil
+        return false
     }
 
     @discardableResult

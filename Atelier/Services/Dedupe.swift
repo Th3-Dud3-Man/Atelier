@@ -34,6 +34,26 @@ enum Dedupe {
         return words.sorted().joined(separator: " ")
     }
 
+    /// Mots significatifs d'un texte : minuscules, sans accents, sans ponctuation, sans mots vides,
+    /// et sans les mots d'une seule ou deux lettres, trop bruyants pour un rapprochement.
+    static func keywords(_ text: String) -> Set<String> {
+        Set(fingerprint(text).split(separator: " ").map(String.init).filter { $0.count > 2 })
+    }
+
+    /// Forme comparable d'un chemin de fichier, pour y chercher les mots d'une question.
+    static func foldedPath(_ path: String) -> String {
+        let folded = path.folding(
+            options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive],
+            locale: Locale(identifier: "fr_FR")
+        )
+        var cleaned = ""
+        cleaned.reserveCapacity(folded.count)
+        for character in folded {
+            cleaned.append(character.isLetter || character.isNumber ? character : " ")
+        }
+        return cleaned
+    }
+
     static let freshWindow: TimeInterval = 7 * 24 * 3600
 
     struct ExactMatch: Sendable {

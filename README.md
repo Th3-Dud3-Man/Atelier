@@ -25,7 +25,7 @@ Budget de fonctionnement : quelques dollars par mois pour un usage quotidien. Le
 1. Ouvrez le dossier du projet et double-cliquez sur `Atelier.xcodeproj`.
 2. Dans la colonne de gauche, cliquez sur le projet **Atelier** (tout en haut), puis sur la cible **Atelier**, onglet **Signing & Capabilities**.
 3. Cochez **Automatically manage signing** et choisissez votre **Team** dans le menu déroulant.
-4. Si Xcode se plaint que l'identifiant est déjà utilisé, changez **Bundle Identifier** en quelque chose d'unique, par exemple `com.votrenom.latelier`.
+4. L'identifiant est `com.bureau.latelier`. Si Xcode se plaint qu'il est déjà utilisé, changez **Bundle Identifier** en quelque chose d'unique, par exemple `com.votrenom.latelier`.
 
 **Pour chaque appareil :**
 
@@ -62,6 +62,18 @@ L'indexation démarre immédiatement, en arrière-plan. Vous pouvez chercher pen
 **Formats pris en charge :** PDF, Word, texte, Markdown, RTF, HTML, tableurs, présentations, ePub, fichiers de code. Les images, l'audio et la vidéo ne peuvent pas être indexés par Gemini : ils restent connus par leur nom, dans le catalogue, mais leur contenu n'est jamais envoyé.
 
 **Deux limites de Gemini à connaître :** un fichier ne doit pas dépasser 100 Mo, et l'espace occupé chez Google vaut environ trois fois la taille de vos documents. L'écran **Mes fichiers** vous montre où vous en êtes.
+
+### c. Si votre corpus dépasse le budget
+
+Google plafonne un corpus à **10 Go**, et comme l'empreinte réelle vaut environ trois fois la taille brute, **trois giga-octets de documents remplissent déjà ce plafond**. Un corpus plus gros que cela ne peut donc pas être indexé d'un bloc — ce n'est pas un choix de l'app, c'est la limite du service.
+
+L'app est faite pour ce cas, et elle ne vous demande rien :
+
+- **Tout est catalogué**, quelle que soit la taille : chaque fichier est connu par son nom, son dossier et sa date. Le catalogue vit sur l'appareil, ne coûte rien et n'est jamais envoyé.
+- **Le corpus indexé est un plan de travail**, pas une copie de votre disque. Il tient dans un budget que vous réglez (3 Go par défaut), et l'app le remplit d'abord avec vos documents les plus récents.
+- **Le reste entre à la demande.** Quand une question porte sur un fichier catalogué, l'app l'envoie à ce moment-là, cherche dedans, et répond. S'il n'y a plus de place, le document indexé le plus ancien cède la sienne — il reviendra de la même façon le jour où vous en aurez besoin.
+
+Concrètement : vos 10 Go sont tous cherchables, et vous ne payez l'indexation que de ce qui sert vraiment. Une réindexation coûte quelques centimes, jamais plus.
 
 ---
 
@@ -127,7 +139,9 @@ Si votre inscription au programme développeur n'est pas encore active — l'ins
 | Une recherche Internet approfondie | de 0,01 à 0,05 $ |
 | Une transcription d'une minute | environ 0,0006 $ |
 
-Un usage quotidien nourri reste très en dessous des 20 $ par mois. Les tarifs sont relevés le 13 août 2026 et modifiables dans **Réglages › Diagnostics** si Google ou Perplexity les changent.
+Un usage quotidien nourri reste très en dessous des 20 $ par mois. **Il n'existe pas de version gratuite de cette app :** chercher dans vos fichiers passe par Gemini, comme chercher sur Internet passe par Perplexity. Ce qui est gratuit, c'est le catalogue — savoir quels fichiers vous avez, les retrouver par leur nom — et le stockage du corpus chez Google. Ce qui se paie, c'est l'indexation, une fois par fichier, et chaque question posée.
+
+**Et la clé gratuite de Google ?** Elle existe, mais ne l'utilisez pas ici. Les conditions d'utilisation de l'API Gemini distinguent l'offre gratuite de l'offre facturée : sur la gratuite, Google se réserve le droit de lire vos documents, de les faire relire par des humains et de s'en servir pour améliorer ses produits ; le corpus y est en outre plafonné à 1 Go. Dès que la facturation est activée sur le projet, cela cesse — vos fichiers ne servent plus qu'à vous répondre. Pour des documents personnels, la clé facturée est le seul choix raisonnable. Les tarifs sont relevés le 13 août 2026 et modifiables dans **Réglages › Diagnostics** si Google ou Perplexity les changent.
 
 ---
 
@@ -149,7 +163,8 @@ Un usage quotidien nourri reste très en dessous des 20 $ par mois. Les tarifs s
 
 ## 9. Confidentialité
 
-- Vos documents sont envoyés **uniquement à Google**, pour être indexés et cités.
+- Vos documents sont envoyés **uniquement à Google**, pour être indexés et cités — et seulement ceux qui entrent dans le corpus : le catalogue, lui, ne quitte jamais l'appareil.
+- La clé Gemini doit venir d'un projet **où la facturation est activée** : c'est ce qui interdit contractuellement à Google d'exploiter vos documents (voir §7).
 - Perplexity ne reçoit **que la question reformulée**, jamais un extrait de vos fichiers.
 - Aucune autre destination. Aucune analyse d'usage, aucun traceur, aucun compte.
 - Les clés vivent dans le **trousseau** de l'appareil, protégées après le premier déverrouillage, jamais dans une sauvegarde ni dans le dépôt de code.

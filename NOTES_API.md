@@ -43,6 +43,20 @@ Autres tarifs relevés (page « Last updated 2026-08-13 UTC ») :
 
 - Indexation : facturée au tarif du modèle d'embedding (0,15 $/M tokens). ✅
 - **Stockage : gratuit. Embeddings de requête : gratuits.** ✅
+- Les passages retrouvés sont facturés comme des tokens de contexte ordinaires. ✅
+
+### 1.4 Offre gratuite et offre facturée : ce n'est pas seulement une question de quota
+
+Les conditions d'utilisation de l'API Gemini (`ai.google.dev/gemini-api/terms`) séparent nettement
+les deux : sur l'offre **gratuite**, « Google uses the content you submit to the Services and any
+generated responses to provide, improve, and develop Google products and services », et « human
+reviewers may read, annotate, and process your API input and output ». Sur l'offre **facturée**,
+« Google doesn't use your prompts (including associated system instructions, cached content, and
+files such as images, videos, or documents) or responses to improve our products ». ✅
+
+Conséquence pour L'Atelier : la clé doit venir d'un projet où la facturation est activée. Ce n'est
+pas une question de budget — c'est la seule version des conditions compatible avec la promesse faite
+dans les réglages de l'app.
 - Les passages retrouvés comptent comme **tokens d'entrée** de l'appel `generateContent`. ✅
 
 ### 1.4 Authentification et CORS
@@ -166,7 +180,9 @@ En streaming, `groundingChunks` ne contient que les passages pas encore envoyés
 | Limite | Valeur |
 |---|---|
 | Taille maximale d'un fichier | **100 Mo** ✅ |
-| Taille totale des stores (palier 1, compte facturé) | 10 Go ✅ |
+| Taille totale des stores — offre gratuite | 1 Go ✅ |
+| Taille totale des stores — palier 1 (facturation activée) | 10 Go ✅ |
+| Palier 2 / palier 3 | 100 Go / 1 To ✅ |
 | Empreinte réelle dans le quota | **≈ 3 × la taille des données brutes** ✅ |
 | Taille conseillée d'un store | < 20 Go pour garder la latence basse ✅ |
 | Pagination | 20 éléments par page maximum ✅ |
