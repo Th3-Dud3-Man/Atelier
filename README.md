@@ -215,6 +215,6 @@ L'abonnement Apple Developer à 99 € par an n'entre pas dans ce compte, et l'a
 | `Tools/test-apis.sh` | Vérifie les appels réels avec vos clés et affiche les réponses brutes |
 | `Tools/typecheck.sh` | Relit le code hors Xcode (ne remplace pas une compilation) |
 | `Tools/run-tests.sh` | Exécute les tests de logique pure : persistance, anti-dépense, calcul des coûts |
-| `Tools/make-icon.sh` | Régénère l'icône de l'app |
+| `Tools/make-icon.py` | Redessine l'icône : `python3 Tools/make-icon.py encre\|papier\|sobre` |
 | `PLAN.md` | Le plan de construction et son état |
 | `docs/CAHIER_DES_CHARGES.md` | Le cahier des charges consolidé, pour qu'une session de travail future n'ait pas besoin de la conversation d'origine |
