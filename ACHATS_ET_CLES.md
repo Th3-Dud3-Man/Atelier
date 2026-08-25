@@ -1,278 +1,277 @@
-# Ce qu'il faut acheter, et où trouver chaque clé
+# Dans l'ordre : construire l'app, puis la remplir
 
-Guide pas à pas, dans l'ordre. Comptez une heure la première fois, pauses comprises.
-Rien ici ne demande de savoir programmer : ce sont des formulaires à remplir et des
-fichiers à copier.
+Deux moments distincts, et c'est ce qui compte.
 
-**Une règle qui ne souffre aucune exception :** vos clés Gemini et Perplexity ne vont
-**jamais** sur GitHub. Elles se saisissent dans les réglages de l'app, sur votre iPhone,
-et vivent dans le trousseau de l'appareil. Les secrets GitHub décrits plus bas ne servent
-qu'à Apple — signer l'app et la déposer sur TestFlight.
+**Partie A — construire et installer l'app.** Uniquement Apple et GitHub. Aucune clé
+d'intelligence artificielle n'intervient ici, et il n'y a rien à payer d'autre que
+l'abonnement développeur que vous avez déjà. Comptez une heure.
 
----
+**Partie B — une fois l'app sur l'iPhone.** C'est là que vous créez vos clés Gemini et
+Perplexity, que vous les collez dans les réglages de l'app, et que vous lui désignez
+votre dossier iCloud. Comptez vingt minutes.
 
-## Récapitulatif de ce que vous allez payer
-
-| Quoi | Où | Combien | Obligatoire ? |
-|---|---|---|---|
-| Compte Apple Developer | developer.apple.com | 99 € / an | oui, vous l'avez déjà |
-| Crédit API Google (Gemini) | aistudio.google.com | à l'usage, quelques euros / mois | **oui** |
-| Crédit API Perplexity | perplexity.ai/settings/api | crédits prépayés, ~0,006 € la recherche | seulement pour Internet |
-| iCloud | Réglages de l'iPhone | 0,99 € à 2,99 € / mois | oui, pour le dossier surveillé |
-| GitHub Actions | github.com | gratuit sur un dépôt public, 2 000 min/mois sur un privé | oui |
-
-Les minutes GitHub sur macOS comptent **dix fois** : 2 000 minutes gratuites en valent 200
-sur un Mac. Une construction prend cinq à dix minutes. Vous avez donc de quoi faire une
-vingtaine d'envois par mois sur un dépôt privé — largement assez, et gratuit et illimité
-si le dépôt est public. Comme il ne contient aucun secret, le rendre public ne vous
-expose à rien.
+**La règle qui ne souffre aucune exception :** vos clés Gemini et Perplexity ne vont
+**jamais** sur GitHub. Elles vivent dans le trousseau de l'iPhone. Les secrets de la
+partie A ne servent qu'à Apple — signer l'app et la déposer sur TestFlight.
 
 ---
 
-## Étape 1 — La clé Gemini (indispensable)
+# PARTIE A — Construire et installer l'app
 
-C'est elle qui lit vos fichiers et rédige les réponses.
+## Étape 0 — Vérifier que le code compile (gratuit, cinq minutes, aucun compte)
 
-1. Allez sur **aistudio.google.com**, connectez-vous avec votre compte Google.
-2. En haut à gauche, **Get API key** (ou « Obtenir une clé API »).
-3. **Create API key** → choisissez ou créez un projet Google Cloud.
-4. **Le point à ne pas rater : activez la facturation sur ce projet.** Le bouton
-   « Set up billing » ou « Enable billing » vous emmène sur la console Google Cloud, où
-   vous ajoutez une carte bancaire.
+À faire en premier : inutile de s'occuper de certificats si le code ne compile pas.
 
-   Pourquoi c'est indispensable, et pas seulement une question de quota : sur l'offre
-   gratuite, les conditions d'utilisation de l'API autorisent Google à lire vos documents,
-   à les faire relire par des humains et à s'en servir pour améliorer ses produits, et
-   votre corpus est plafonné à 1 Go. Dès que la facturation est activée, Google s'interdit
-   contractuellement tout cela et le plafond passe à 10 Go.
+1. Sur GitHub, onglet **Actions**.
+2. Le flux **Compiler** s'est déclenché tout seul au dernier envoi de code. Ouvrez la
+   dernière exécution.
+3. **Si c'est vert :** passez à l'étape 1.
+4. **Si c'est rouge :** ouvrez l'exécution, copiez l'encadré « Erreurs et avertissements »
+   et envoyez-le-moi. Je corrige, et vous relancez. C'est la première fois que ce code voit
+   un vrai compilateur : quelques allers-retours sont normaux.
 
-5. Copiez la clé. Elle commence par `AIza…`.
-6. **Fixez un plafond de dépense chez Google**, en plus de celui de l'app : console Google
-   Cloud → **Billing** → **Budgets & alerts** → **Create budget** → 25 € par mois, avec
-   alerte par courriel à 50 %, 90 % et 100 %. Ceinture et bretelles.
-
-**Renouvellement :** il n'y a rien à renouveler. Google facture à l'usage et prélève sur
-la carte chaque mois, comme une facture d'électricité. Vous ne payez que ce qui a été
-consommé, et le service ne s'interrompt jamais faute de crédit. Un mois sans question
-ne coûte rien.
-
-**Où la coller :** dans l'app, sur l'iPhone. Écran d'accueil → icône horloge (en haut à
-gauche) → engrenage (en haut à droite) → champ **Gemini**. Nulle part ailleurs.
-
----
-
-## Étape 2 — La clé Perplexity (facultative)
-
-Elle ne sert qu'à la recherche Internet. Sans elle, l'app cherche dans vos fichiers et
-le dit clairement.
-
-1. Allez sur **perplexity.ai**, connectez-vous.
-2. **Settings** → **API** (ou directement perplexity.ai/settings/api).
-3. Section **API Keys** → **Generate**. Copiez la clé, elle commence par `pplx-…`.
-4. Perplexity fonctionne **par crédits prépayés, et non par abonnement mensuel**. Ce n'est
-   pas 10 € par mois : vous achetez une réserve, elle se consomme à mesure des recherches,
-   et un mois sans recherche ne coûte rien. Section **Billing** → **Buy more credits** →
-   10 $ suffisent amplement : à 0,006 € la recherche, cela représente plus de mille cinq
-   cents recherches.
-5. **Pour que cela ne s'arrête jamais**, activez le rechargement automatique : sur la page
-   **Billing**, à côté d'**Auto reload**, cliquez **Change preferences** et fixez le seuil
-   (par exemple : recharger 10 $ dès que le solde passe sous 3 $). Cette option est
-   **désactivée par défaut** — sans elle, la recherche Internet s'arrêtera net le jour où
-   la réserve s'épuise, et l'app vous dira simplement que la clé n'a plus de crédit.
-6. Vérifiez au passage le **plafond de dépense mensuel** proposé sur la même page, et
-   abaissez-le à une dizaine de dollars : votre budget de 30 € n'a aucune raison d'être
-   dépassé côté Perplexity.
-
-À ne pas confondre avec l'abonnement **Perplexity Pro** (~20 €/mois) : c'est un produit
-différent, pour le site et l'application grand public. L'app n'en a pas besoin.
-
-**Où la coller :** même écran de réglages, champ **Perplexity**.
-
----
-
-## Les renouvellements, en un coup d'œil
-
-| | Comment cela se renouvelle | Ce que vous avez à faire |
-|---|---|---|
-| iCloud | abonnement mensuel automatique | rien |
-| Apple Developer | abonnement annuel automatique | rien |
-| Gemini | facturé à l'usage, prélevé chaque mois | rien |
-| Perplexity | **crédits prépayés qui s'épuisent** | activer le rechargement automatique (étape 2) |
-
-Perplexity est le seul des quatre à pouvoir s'arrêter tout seul. C'est pour cela que
-l'étape 2 insiste sur le rechargement automatique.
-
----
-
-## Étape 3 — iCloud
-
-L'app lit un dossier d'iCloud Drive que vous lui désignez.
-
-1. Sur l'iPhone : **Réglages** → votre nom → **iCloud** → **iCloud+** → choisissez un
-   forfait dont l'espace couvre vos documents.
-2. **iCloud Drive** doit être activé.
-3. « Optimiser le stockage » peut rester activé : l'app déclenche elle-même le
-   téléchargement du fichier dont elle a besoin, au moment où elle en a besoin.
-
-Rangez vos documents dans **un seul dossier** d'iCloud Drive, avec des sous-dossiers si
-vous voulez. C'est ce dossier que vous désignerez à l'app.
-
----
-
-## Étape 4 — Apple : l'identifiant de l'app
-
-À faire une fois, sur le Mac ou dans un navigateur.
+## Étape 1 — Déclarer l'app chez Apple
 
 1. **developer.apple.com/account** → **Certificates, Identifiers & Profiles** →
    **Identifiers** → le **+** bleu.
 2. **App IDs** → **App** → Continue.
-3. **Description** : `L Atelier`. **Bundle ID** : cochez *Explicit* et saisissez
-   exactement `com.bureau.latelier`.
-4. Dans la liste des capacités, ne cochez rien : l'app n'en utilise aucune.
+3. *Description* : `L Atelier`. *Bundle ID* : cochez **Explicit** et saisissez exactement
+   `com.bureau.latelier`.
+4. Ne cochez aucune capacité : l'app n'en utilise aucune.
 5. **Continue** → **Register**.
 
-## Étape 5 — Apple : la fiche de l'app
+**Notez votre Team ID** : les dix caractères visibles en haut à droite de la page du
+compte, sous « Membership ». Vous en aurez besoin à l'étape 6.
+
+## Étape 2 — Créer la fiche de l'app
 
 1. **appstoreconnect.apple.com** → **Mes apps** → le **+** → **Nouvelle app**.
-2. Plateforme **iOS**, nom `L'Atelier` (s'il est pris, mettez `L'Atelier — Lucas` : ce
-   nom ne se voit que dans TestFlight), langue **Français**, *Bundle ID*
-   `com.bureau.latelier`, **SKU** `latelier-1`.
-3. **Créer**. Vous n'avez rien d'autre à remplir : une app qui reste en TestFlight n'a
-   besoin ni de captures d'écran, ni de description, ni de passer en revue.
+2. Plateforme **iOS** · nom `L'Atelier` (s'il est déjà pris, mettez `L'Atelier — Lucas` :
+   ce nom ne se voit que dans TestFlight) · langue **Français** · *Bundle ID*
+   `com.bureau.latelier` · **SKU** `latelier-1`.
+3. **Créer**. Rien d'autre à remplir : une app qui reste en TestFlight n'a besoin ni de
+   captures d'écran, ni de description, ni de passer en revue.
 
----
+## Étape 3 — Exporter le certificat de distribution
 
-## Étape 6 — Le certificat de distribution (le fichier .p12)
+C'est ce qui prouve à Apple que l'app vient de vous. **Sur le Mac.**
 
-C'est ce qui prouve à Apple que l'app vient bien de vous. À faire **sur le Mac**.
-
-1. Ouvrez **Xcode** → menu **Xcode** → **Settings** → onglet **Accounts**.
-2. Connectez votre compte Apple s'il ne l'est pas déjà, sélectionnez votre équipe, puis
-   **Manage Certificates…**.
-3. En bas à gauche, le **+** → **Apple Distribution**. Une ligne apparaît dans la liste.
+1. **Xcode** → menu **Xcode** → **Settings** → onglet **Accounts**.
+2. Connectez votre compte Apple, sélectionnez votre équipe, puis **Manage Certificates…**.
+3. En bas à gauche, le **+** → **Apple Distribution**. Une ligne apparaît.
 4. Fermez Xcode. Ouvrez **Trousseaux d'accès** (Applications → Utilitaires).
 5. À gauche : trousseau **Connexion**, catégorie **Mes certificats**.
-6. Trouvez la ligne **Apple Distribution: votre nom (XXXXXXXXXX)**. Déroulez-la avec le
-   petit triangle : elle doit contenir une **clé privée**. Si elle n'en contient pas,
-   ce n'est pas la bonne ligne.
-7. Clic droit sur le certificat → **Exporter « Apple Distribution… »** → format
-   **Échange d'informations personnelles (.p12)** → enregistrez sous
-   `~/Desktop/certificat.p12`.
-8. Un mot de passe vous est demandé : **inventez-en un et notez-le**. Ce sera le secret
-   `P12_PASSWORD`. (Le Mac vous demandera ensuite votre mot de passe de session : ce
-   n'est pas le même, ne le confondez pas.)
+6. Trouvez **Apple Distribution: votre nom (XXXXXXXXXX)** et **dépliez la ligne** avec le
+   petit triangle : elle doit contenir une **clé privée**. Sans clé privée, ce n'est pas
+   la bonne ligne, et la construction échouera plus tard.
+7. Clic droit sur le certificat → **Exporter…** → format **Échange d'informations
+   personnelles (.p12)** → enregistrez sur le bureau sous `certificat.p12`.
+8. Un mot de passe vous est demandé : **inventez-en un et notez-le.** (Le Mac demandera
+   ensuite votre mot de passe de session : ce n'est pas le même, ne les confondez pas.)
 
-Au passage, notez votre **Team ID** : c'est le code à dix caractères entre parenthèses,
-visible aussi sur developer.apple.com/account, en haut à droite, sous « Membership ».
-
-## Étape 7 — Le profil de provisionnement
+## Étape 4 — Créer le profil de provisionnement
 
 1. **developer.apple.com/account** → **Profiles** → le **+**.
-2. Sous **Distribution**, choisissez **App Store Connect** → Continue.
-3. **App ID** : `com.bureau.latelier` → Continue.
-4. Choisissez le certificat **Apple Distribution** créé à l'étape 6 → Continue.
-5. **Provisioning Profile Name** : `Atelier App Store`. Retenez ce nom exactement.
-6. **Generate** → **Download**. Vous obtenez un fichier `.mobileprovision`. Mettez-le
-   sur le bureau.
+2. Sous **Distribution** : **App Store Connect** → Continue.
+3. *App ID* : `com.bureau.latelier` → Continue.
+4. Choisissez le certificat **Apple Distribution** de l'étape 3 → Continue.
+5. *Provisioning Profile Name* : `Atelier App Store`.
+6. **Generate** → **Download**. Mettez le `.mobileprovision` sur le bureau.
 
-## Étape 8 — La clé App Store Connect (le fichier .p8)
+## Étape 5 — Créer la clé App Store Connect
 
-C'est elle qui permet à GitHub de déposer la version sur TestFlight sans votre mot de passe.
+C'est elle qui permet à GitHub de déposer la version sans votre mot de passe.
 
-1. **appstoreconnect.apple.com** → **Utilisateurs et accès** → onglet **Intégrations**
-   (ou « Clés »).
+1. **appstoreconnect.apple.com** → **Utilisateurs et accès** → onglet **Intégrations**.
 2. Section **App Store Connect API**, sous-onglet **Accès à l'équipe** → le **+**.
-3. **Nom** : `GitHub`. **Accès** : **App Manager**. → **Générer**.
-4. **Téléchargez le fichier `.p8` immédiatement** : Apple ne le propose qu'une fois.
-5. Sur la même page, notez le **Key ID** (dix caractères) et l'**Issuer ID** (un long
-   identifiant avec des tirets, en haut de la section).
+3. *Nom* : `GitHub` · *Accès* : **App Manager** → **Générer**.
+4. **Téléchargez le fichier `.p8` tout de suite** : Apple ne le propose qu'une fois.
+5. Sur la même page, notez le **Key ID** (dix caractères) et l'**Issuer ID** (long
+   identifiant à tirets, en haut de la section).
 
----
+## Étape 6 — Déposer les secrets sur GitHub
 
-## Étape 9 — Les huit secrets GitHub
-
-Sur votre dépôt : **Settings** → **Secrets and variables** → **Actions** →
-**New repository secret**. Un secret à la fois, le nom exactement comme écrit ici.
-
-| Nom du secret | Ce qu'on y met | D'où il vient |
-|---|---|---|
-| `APPLE_TEAM_ID` | les dix caractères de votre équipe | étape 6 |
-| `BUILD_CERTIFICATE_BASE64` | le `.p12` transformé en texte (voir ci-dessous) | étape 6 |
-| `P12_PASSWORD` | le mot de passe inventé à l'export | étape 6 |
-| `PROVISIONING_PROFILE_BASE64` | le `.mobileprovision` transformé en texte | étape 7 |
-| `KEYCHAIN_PASSWORD` | n'importe quel mot de passe inventé, jamais réutilisé ailleurs | vous |
-| `ASC_KEY_ID` | le Key ID | étape 8 |
-| `ASC_ISSUER_ID` | l'Issuer ID | étape 8 |
-| `ASC_PRIVATE_KEY` | **tout le contenu** du fichier `.p8` | étape 8 |
-
-**Transformer un fichier en texte.** Deux fichiers ne peuvent pas être collés tels quels :
-il faut les convertir. Ouvrez **Terminal** (Applications → Utilitaires) et tapez, une
-ligne à la fois :
+Vous avez maintenant les quatre choses nécessaires. Un script les demande dans l'ordre,
+vérifie chacune, et les dépose. **Sur le Mac**, dans le Terminal :
 
 ```bash
-base64 -i ~/Desktop/certificat.p12 | pbcopy
+cd ~/Desktop && git clone https://github.com/Th3-Dud3-Man/Atelier.git
+cd Atelier && git checkout claude/new-session-rxzige
+bash Tools/preparer-secrets.sh
 ```
 
-Le contenu est maintenant dans le presse-papier : collez-le directement dans le secret
-`BUILD_CERTIFICATE_BASE64`. Puis, pour le profil :
+Le script vous demande, une par une : le Team ID, le `.p12` et son mot de passe, le
+`.mobileprovision`, puis le `.p8` avec son Key ID et son Issuer ID. Il vérifie au passage
+que le mot de passe ouvre bien le certificat, que celui-ci contient sa clé privée, et que
+le profil vise bien `com.bureau.latelier` — les trois causes d'échec les plus courantes,
+détectées avant de perdre une construction.
 
-```bash
-base64 -i ~/Desktop/*.mobileprovision | pbcopy
-```
+Si l'outil `gh` est installé et connecté, il dépose les huit secrets lui-même. Sinon il
+place chaque valeur dans le presse-papier, une à la fois, et vous accompagne pendant que
+vous les collez dans **Settings → Secrets and variables → Actions → New repository
+secret**.
 
-Collez dans `PROVISIONING_PROFILE_BASE64`. Enfin, pour la clé `.p8` :
+<details>
+<summary>Si vous préférez tout faire à la main</summary>
 
-```bash
-cat ~/Downloads/AuthKey_*.p8 | pbcopy
-```
+| Nom du secret | Ce qu'on y met |
+|---|---|
+| `APPLE_TEAM_ID` | les dix caractères de l'équipe (étape 1) |
+| `BUILD_CERTIFICATE_BASE64` | `base64 -i ~/Desktop/certificat.p12 \| pbcopy` |
+| `P12_PASSWORD` | le mot de passe inventé à l'étape 3 |
+| `PROVISIONING_PROFILE_BASE64` | `base64 -i ~/Desktop/*.mobileprovision \| pbcopy` |
+| `KEYCHAIN_PASSWORD` | n'importe quel mot de passe inventé, jamais réutilisé |
+| `ASC_KEY_ID` | le Key ID (étape 5) |
+| `ASC_ISSUER_ID` | l'Issuer ID (étape 5) |
+| `ASC_PRIVATE_KEY` | `cat ~/Downloads/AuthKey_*.p8 \| pbcopy`, lignes BEGIN et END comprises |
 
-Collez dans `ASC_PRIVATE_KEY` — avec les lignes `-----BEGIN PRIVATE KEY-----` et
-`-----END PRIVATE KEY-----`, elles font partie de la clé.
+</details>
 
-**Une fois les huit secrets en place, effacez les fichiers du bureau et des
-téléchargements.** GitHub les garde chiffrés et ne les réaffichera jamais ; vous n'avez
-plus besoin des originaux, et un `.p12` qui traîne est un `.p12` qui fuit.
+**Une fois les huit secrets en place, effacez le `.p12`, le `.mobileprovision` et le `.p8`.**
+GitHub les garde chiffrés et ne les réaffichera jamais ; un `.p12` qui traîne est un `.p12`
+qui fuit.
 
----
+## Étape 7 — Construire et envoyer
 
-## Étape 10 — Construire et envoyer
-
-1. Sur GitHub, onglet **Actions**.
-2. À gauche, le flux **TestFlight** → bouton **Run workflow** → choisissez la branche
+1. GitHub → onglet **Actions** → flux **TestFlight** → **Run workflow** → branche
    `claude/new-session-rxzige` → **Run workflow**.
-3. Cinq à dix minutes plus tard, la version est dans App Store Connect. Elle passe
-   d'abord par un traitement automatique d'une dizaine de minutes.
-4. **appstoreconnect.apple.com** → votre app → onglet **TestFlight** → dès que la version
-   est « Prête à tester », ajoutez-vous comme testeur interne.
-5. Installez **TestFlight** depuis l'App Store sur l'iPhone et l'iPad, ouvrez-le, et
-   l'app est là.
+2. Cinq à dix minutes. Puis App Store Connect traite la version, une dizaine de minutes
+   de plus.
+3. **appstoreconnect.apple.com** → votre app → onglet **TestFlight** → quand la version
+   est « Prête à tester », ajoutez-vous comme **testeur interne**.
 
-Il existe aussi un second flux, **Compiler**, qui se déclenche tout seul à chaque envoi de
-code et ne demande **aucun secret**. Il ne fait que compiler et affiche les erreurs.
-C'est le plus rapide pour me faire remonter ce que dit le compilateur : ouvrez la
-construction en échec, copiez l'encadré « Erreurs et avertissements », envoyez-le-moi.
+## Étape 8 — Installer sur l'iPhone et l'iPad
 
-Faites-le tourner **avant** toute l'installation Apple : s'il y a des erreurs de
-compilation, autant les corriger avant de s'occuper des certificats.
+1. Installez **TestFlight** depuis l'App Store, sur les deux appareils.
+2. Ouvrez-le avec le même compte Apple : **L'Atelier** y est. Installez.
+3. Ouvrez l'app. Elle vous dira qu'il lui manque une clé — c'est normal, c'est la partie B.
+
+**L'app est construite et installée. La partie A est terminée, et vous n'y reviendrez que
+pour installer une nouvelle version : un clic sur « Run workflow », rien d'autre.**
 
 ---
 
-## Si quelque chose bloque
+# PARTIE B — Ce que vous mettez dans l'app
 
-**« No signing certificate found »** — Le `.p12` n'a pas été exporté avec sa clé privée.
-Reprenez l'étape 6 en vérifiant que la ligne du trousseau se déroule bien sur une clé.
+## Étape 9 — Préparer le dossier iCloud
 
-**« Provisioning profile doesn't match »** — Le nom du profil dans le secret et celui
-d'Apple diffèrent, ou le profil ne vise pas `com.bureau.latelier`. Reprenez l'étape 7.
+1. Sur l'iPhone : **Réglages** → votre nom → **iCloud** → **iCloud Drive** activé.
+2. Rangez vos documents dans **un seul dossier** d'iCloud Drive, sous-dossiers permis.
+   C'est ce dossier que vous désignerez à l'app.
+3. « Optimiser le stockage » peut rester activé : l'app déclenche elle-même le
+   téléchargement du fichier dont elle a besoin, quand elle en a besoin.
+
+## Étape 10 — Créer la clé Gemini
+
+C'est elle qui lit vos fichiers et rédige les réponses. Sans elle, l'app ne fait rien.
+
+1. **aistudio.google.com** → connectez-vous → **Get API key** → **Create API key**.
+2. Choisissez ou créez un projet Google Cloud.
+3. **Activez la facturation sur ce projet** (« Set up billing »), avec une carte bancaire.
+
+   Ce n'est pas qu'une question de quota. Sur l'offre gratuite, les conditions
+   d'utilisation autorisent Google à lire vos documents, à les faire relire par des
+   humains et à s'en servir pour améliorer ses produits, et votre corpus est plafonné à
+   1 Go. Avec la facturation activée, Google s'interdit contractuellement tout cela et le
+   plafond passe à 10 Go.
+
+4. Copiez la clé — elle commence par `AIza…`. Gardez l'onglet ouvert.
+5. **Posez un garde-fou** : console Google Cloud → **Billing** → **Budgets & alerts** →
+   **Create budget** → 25 € par mois, alertes à 50 %, 90 % et 100 %.
+
+*Renouvellement : rien à faire. Google facture l'usage du mois écoulé, comme
+l'électricité. Un mois sans question ne coûte rien, et le service ne s'interrompt jamais.*
+
+## Étape 11 — Créer la clé Perplexity (facultative)
+
+Elle ne sert qu'à la recherche Internet. Sans elle, l'app cherche dans vos fichiers et
+le dit clairement.
+
+1. **perplexity.ai** → **Settings** → **API**.
+2. **API Keys** → **Generate**. La clé commence par `pplx-…`.
+3. **Billing** → **Buy more credits** → 10 $. Ce ne sont **pas** 10 $ par mois : une
+   réserve prépayée qui se consomme, plus de mille cinq cents recherches, et un mois sans
+   recherche ne coûte rien.
+4. **Pour que cela ne s'arrête jamais** : sur la même page, à côté d'**Auto reload**,
+   **Change preferences** → recharger 10 $ dès que le solde passe sous 3 $. Cette option
+   est **désactivée par défaut**, et c'est le seul des quatre services qui puisse
+   s'arrêter tout seul.
+5. Abaissez au passage le plafond de dépense mensuel proposé à une dizaine de dollars.
+
+*À ne pas confondre avec l'abonnement Perplexity Pro (~20 €/mois), qui est un autre
+produit dont l'app n'a pas besoin.*
+
+## Étape 12 — Coller les deux clés dans l'app
+
+1. Ouvrez **L'Atelier** sur l'iPhone.
+2. Icône **horloge** (en haut à gauche) → **engrenage** (en haut à droite).
+3. Collez la clé **Gemini**, puis la clé **Perplexity**.
+4. **Enregistrer et tester**. L'app vous dit franchement si chaque clé fonctionne.
+
+> Le test Perplexity effectue une vraie recherche, facturée un demi-centime. C'est le seul
+> moyen honnête de vérifier qu'une clé marche.
+
+5. Fermez complètement l'app, rouvrez-la, revenez aux réglages : **les clés doivent
+   toujours être là**. Si elles ont disparu, dites-le-moi.
+
+## Étape 13 — Désigner votre dossier
+
+1. Retour à l'accueil → icône **dossier** (en haut à droite) → **Ajouter un dossier**.
+2. Le sélecteur d'iCloud Drive s'ouvre : choisissez **un dossier**, pas un fichier.
+3. L'indexation démarre seule, en arrière-plan. Vous pouvez chercher pendant ce temps.
+
+Sur un corpus de plus de 3 Go, l'app remplit son budget avec vos documents les plus
+récents, laisse le reste au catalogue, et ira y chercher à la demande. C'est prévu, et
+`CHECKLIST_APPAREIL.md` contient le test qui le vérifie.
+
+## Étape 14 — Votre première question
+
+Posez une question dont vous **connaissez la réponse** dans vos documents, formulée **avec
+d'autres mots que le texte**. C'est le seul essai qui prouve que la recherche fonctionne
+vraiment.
+
+Puis suivez `CHECKLIST_APPAREIL.md` : il reprend, dans l'ordre, tout ce qu'il faut
+éprouver sur l'appareil, avec le résultat attendu à chaque fois et ce qu'il faut me
+signaler.
+
+---
+
+# Ce que vous payez, et comment cela se renouvelle
+
+| | Où | Combien | Renouvellement |
+|---|---|---|---|
+| Apple Developer | developer.apple.com | 99 € / an | automatique |
+| iCloud | Réglages de l'iPhone | 0,99 € à 2,99 € / mois | automatique |
+| Gemini | aistudio.google.com | à l'usage, quelques € / mois | prélevé chaque mois |
+| Perplexity | perplexity.ai | crédits prépayés, ~0,006 € la recherche | **à activer** (étape 11) |
+| GitHub Actions | github.com | gratuit | — |
+
+Le plafond intégré à l'app est réglé à environ 23 € TTC par mois et couvre Gemini et
+Perplexity ensemble. Avec iCloud, vous restez sous les 30 €, et l'app s'arrête d'elle-même
+avant de les dépasser.
+
+Sur GitHub, les minutes macOS comptent dix fois : les 2 000 minutes gratuites d'un dépôt
+privé en valent 200, soit une vingtaine de constructions par mois. Le dépôt ne contenant
+aucun secret, le rendre public rend tout illimité.
+
+---
+
+# Si quelque chose bloque
+
+**« No signing certificate found »** — Le `.p12` a été exporté sans sa clé privée.
+Reprenez l'étape 3 en dépliant bien la ligne du trousseau. (Le script de l'étape 6 détecte
+ce cas avant la construction.)
+
+**« Provisioning profile doesn't match »** — Le profil ne vise pas `com.bureau.latelier`,
+ou son nom diffère. Reprenez l'étape 4.
 
 **« No account for team »** — `APPLE_TEAM_ID` est faux ou contient un espace.
 
-**L'envoi échoue en disant que le build existe déjà** — Deux constructions ont porté le
-même numéro. Relancez : le numéro suit le compteur des exécutions GitHub et s'incrémente
-tout seul.
+**L'envoi dit que le build existe déjà** — Deux constructions ont porté le même numéro.
+Relancez : le numéro suit le compteur GitHub et s'incrémente seul.
 
 **Xcode 26 introuvable sur le runner** — Le journal de l'étape « Choisir la version
 d'Xcode » liste ce qui est installé. Envoyez-le-moi, je fige la version.
 
-Dans tous les cas : le journal complet est téléchargeable en bas de la page de la
-construction, sous **Artifacts**. C'est le document le plus utile à me transmettre.
+Dans tous les cas, le journal complet se télécharge en bas de la page de la construction,
+sous **Artifacts**. C'est le document le plus utile à me transmettre.

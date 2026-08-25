@@ -19,7 +19,7 @@ Budget de fonctionnement : de l'ordre de 25 € par mois tout compris, iCloud in
 
 ---
 
-> **Vous partez de zéro ?** Suivez `ACHATS_ET_CLES.md` : il reprend, pas à pas, ce qu'il faut acheter, où obtenir chaque clé, et quoi déposer dans les secrets GitHub pour construire l'app et l'envoyer sur TestFlight sans passer par un câble.
+> **Vous partez de zéro ?** Suivez `ACHATS_ET_CLES.md`, qui va dans l'ordre : d'abord tout ce qu'il faut pour **construire et installer** l'app (Apple et GitHub, aucune clé d'IA), ensuite, l'app une fois sur l'iPhone, tout ce qu'il faut **y mettre** (clés Gemini et Perplexity, dossier iCloud). Les étapes 1 à 8 puis 9 à 14.
 
 ## 2. Installer l'app sur vos appareils
 
@@ -201,7 +201,8 @@ L'abonnement Apple Developer à 99 € par an n'entre pas dans ce compte, et l'a
 
 | Fichier | À quoi il sert |
 |---|---|
-| `ACHATS_ET_CLES.md` | Ce qu'il faut acheter, où obtenir chaque clé, quoi mettre dans les secrets GitHub |
+| `ACHATS_ET_CLES.md` | Dans l'ordre : construire et installer l'app, puis ce qu'il faut y mettre |
+| `Tools/preparer-secrets.sh` | Demande les quatre pièces Apple une par une, les vérifie, et dépose les huit secrets GitHub |
 | `CHECKLIST_APPAREIL.md` | Ce que vous devez vérifier vous-même, dans l'ordre, sur iPhone et iPad |
 | `.github/workflows/build.yml` | Compile à chaque envoi de code et affiche les erreurs — aucun secret nécessaire |
 | `.github/workflows/testflight.yml` | Construit, signe et dépose une version sur TestFlight, sur demande |
