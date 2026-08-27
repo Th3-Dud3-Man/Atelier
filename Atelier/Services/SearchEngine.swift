@@ -420,7 +420,7 @@ final class SearchEngine {
                     + "enregistrée. C'est elle qui fait les recherches sur le web ; Gemini se "
                     + "contente d'en reformuler la question et d'en rédiger la synthèse."
             } else if wantedFiles && !canSearch(.files) {
-                sourceNotice = store.indexedFiles.isEmpty
+                sourceNotice = store.summary.indexedCount == 0
                     ? "Vos fichiers n'ont pas été consultés : aucun document n'est encore indexé."
                     : "Vos fichiers n'ont pas été consultés : le corpus n'est pas encore créé."
             }
@@ -522,7 +522,7 @@ final class SearchEngine {
     private func canSearch(_ source: SourceMode) -> Bool {
         switch source {
         case .web: !Keychain.get(.perplexity).isEmpty
-        case .files: !store.settings.storeName.isEmpty && !store.indexedFiles.isEmpty
+        case .files: !store.settings.storeName.isEmpty && store.summary.indexedCount > 0
         case .both, .auto: true
         }
     }

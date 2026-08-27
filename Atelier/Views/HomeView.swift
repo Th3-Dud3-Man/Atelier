@@ -264,7 +264,7 @@ struct HomeView: View {
         if store.folders.isEmpty {
             return StatusPill(text: "Choisir un dossier iCloud à indexer", destination: .files)
         }
-        if store.indexedFiles.isEmpty {
+        if store.summary.indexedCount == 0 {
             return StatusPill(text: "Aucun fichier indexé pour l'instant", destination: .files)
         }
         return nil

@@ -84,6 +84,23 @@ final class AppStore {
     /// serait le seul vrai moyen de les perdre.
     private(set) var isReadOnly = false
 
+    /// Chiffres affichés en permanence par l'accueil, Mes fichiers et les réglages.
+    ///
+    /// Ils étaient recalculés à chaque rafraîchissement de vue : trois filtres sur le registre
+    /// et une somme sur les dépenses, pour chaque vue et à chaque modification. Avec quelques
+    /// centaines de fichiers indexés d'affilée, cela devient le poste le plus lourd de l'app.
+    /// On les calcule donc une fois par modification, et les vues les lisent sans rien refaire.
+    struct Summary: Sendable, Equatable {
+        var indexedCount = 0
+        var catalogedCount = 0
+        var problemCount = 0
+        var waitingCount = 0
+        var indexedBytes: Int64 = 0
+        var monthTotal: Double = 0
+    }
+
+    private(set) var summary = Summary()
+
     private var saveTask: Task<Void, Never>?
     /// Les écritures sont chaînées : un instantané plus ancien ne doit jamais arriver après
     /// un plus récent, ce qui ferait reculer les données.
@@ -103,6 +120,26 @@ final class AppStore {
         self.data = outcome.data
         self.isReadOnly = outcome.readOnly
         self.lastPersistenceError = outcome.error
+        self.summary = AppStore.summarise(self.data)
+    }
+
+    private static func summarise(_ data: AppData) -> Summary {
+        var result = Summary()
+        for file in data.files {
+            if file.status == .indexed {
+                result.indexedCount += 1
+                result.indexedBytes += file.size
+            } else {
+                result.catalogedCount += 1
+                if file.status.isProblem { result.problemCount += 1 }
+                if file.isWaitingToRetry { result.waitingCount += 1 }
+            }
+        }
+        let month = CostEntry.monthKey(for: .now)
+        for cost in data.costs where cost.monthKey == month {
+            result.monthTotal += cost.usd
+        }
+        return result
     }
 
     static func defaultFileURL() -> URL {
@@ -173,8 +210,9 @@ final class AppStore {
     /// Écriture différée : les modifications rapprochées ne provoquent qu'une seule écriture.
     func scheduleSave() {
         saveTask?.cancel()
+        let delay: Duration = batchDepth > 0 ? .seconds(4) : .milliseconds(400)
         saveTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(400))
+            try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
             await self?.saveNow()
         }
@@ -209,7 +247,22 @@ final class AppStore {
     /// Modifie les données et programme une écriture.
     func update(_ change: (inout AppData) -> Void) {
         change(&data)
+        summary = AppStore.summarise(data)
         scheduleSave()
+    }
+
+    // ── Écritures en rafale ──────────────────────────────────────────
+
+    /// Pendant une indexation, le registre change à chaque fichier. Réécrire le fichier
+    /// complet toutes les quatre dixièmes de seconde revient à passer l'essentiel du temps
+    /// à encoder du JSON. Le temps d'un lot, on espace les écritures.
+    private var batchDepth = 0
+
+    func beginBatch() { batchDepth += 1 }
+
+    func endBatch() async {
+        batchDepth = max(0, batchDepth - 1)
+        if batchDepth == 0 { await saveNow() }
     }
 
     // ── Réglages ─────────────────────────────────────────────────────
@@ -261,11 +314,7 @@ final class AppStore {
     var indexedFiles: [FileEntry] { data.files.filter { $0.status == .indexed } }
 
     /// Octets bruts déjà envoyés au corpus, et ce qu'il reste du budget.
-    var indexedBytes: Int64 {
-        data.files.reduce(into: Int64(0)) { total, file in
-            if file.status == .indexed { total += file.size }
-        }
-    }
+    var indexedBytes: Int64 { summary.indexedBytes }
     var corpusBudgetBytes: Int64 { data.settings.corpusBudgetBytes }
     var corpusRemainingBytes: Int64 { max(0, corpusBudgetBytes - indexedBytes) }
     var corpusFull: Bool { indexedBytes >= corpusBudgetBytes }
@@ -348,7 +397,7 @@ final class AppStore {
 
     var capReached: Bool {
         let cap = data.settings.monthlyCapUSD
-        return cap > 0 && monthTotal() >= cap
+        return cap > 0 && summary.monthTotal >= cap
     }
 
     var capRatio: Double {

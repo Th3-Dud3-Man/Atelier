@@ -83,7 +83,7 @@ struct HistoryView: View {
     }
 
     private var monthHeader: some View {
-        let total = store.monthTotal()
+        let total = store.summary.monthTotal
         let cap = store.settings.monthlyCapUSD
         return VStack(alignment: .leading, spacing: 4) {
             Text("\(monthName()) : \(CostModel.formatEUR(total, prices: store.settings.prices)) "

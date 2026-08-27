@@ -69,6 +69,12 @@ struct FilesView: View {
                             Label("Scanner maintenant", systemImage: "arrow.clockwise")
                         }
                         .disabled(store.folders.isEmpty || sync.isScanning)
+                        Button {
+                            Task { await sync.retryFailed() }
+                        } label: {
+                            Label("Réessayer les fichiers en erreur", systemImage: "exclamationmark.arrow.circlepath")
+                        }
+                        .disabled(store.summary.problemCount == 0 || sync.isScanning)
                         Divider()
                         Button(role: .destructive) {
                             confirmingReindex = true
@@ -121,7 +127,8 @@ struct FilesView: View {
 
     @ViewBuilder
     private var statusSection: some View {
-        if sync.isScanning || sync.progressText != nil || sync.lastError != nil {
+        if sync.isScanning || sync.progressText != nil || sync.lastError != nil
+            || store.summary.waitingCount > 0 {
             Section {
                 if let progress = sync.progressText {
                     HStack(spacing: 10) {
@@ -138,6 +145,14 @@ struct FilesView: View {
                     Text(error)
                         .font(.footnote)
                         .foregroundStyle(.red)
+                }
+                if store.summary.waitingCount > 0 {
+                    // Sans cette ligne, un fichier en échec paraîtrait simplement ignoré.
+                    Text("\(store.summary.waitingCount) fichier(s) en attente d'un nouvel essai. "
+                         + "L'app réessaie d'elle-même, de plus en plus espacé ; « Réessayer les "
+                         + "fichiers en erreur » force la reprise.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -265,7 +280,7 @@ struct FilesView: View {
 
     private var limitsSection: some View {
         Section("Limites de Gemini") {
-            let bytes = store.indexedFiles.reduce(Int64(0)) { $0 + $1.size }
+            let bytes = store.summary.indexedBytes
             VStack(alignment: .leading, spacing: 6) {
                 Text("Corpus envoyé : \(byteText(bytes)) — l'empreinte réelle chez Google est "
                      + "d'environ trois fois cette taille, soit \(byteText(bytes * 3)).")

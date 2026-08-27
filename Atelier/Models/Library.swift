@@ -53,6 +53,17 @@ struct FileEntry: Codable, Identifiable, Hashable, Sendable {
     var indexedAt: Date?
     var errorMessage: String?
     var lastSeenAt: Date = .now
+    /// Nombre d'échecs consécutifs à l'indexation. **Facultatif à dessein** : un champ
+    /// optionnel absent du fichier se relit sans erreur, et un registre déjà constitué
+    /// survit donc à cette mise à jour.
+    var failureCount: Int?
+    /// Date avant laquelle il est inutile de réessayer. Sans elle, un fichier en échec
+    /// était relu, téléchargé depuis iCloud et renvoyé à chaque passage au premier plan —
+    /// de quoi occuper l'app en permanence et dépenser pour rien.
+    var retryAfter: Date?
+
+    /// Au-delà, on cesse d'essayer seul : c'est un défaut du fichier, pas un incident.
+    static let maximumAttempts = 4
 
     /// Empreinte bon marché : taille + date de modification suffisent à repérer un changement.
     var signature: String { "\(size)-\(Int(modified.timeIntervalSince1970))" }
@@ -63,12 +74,32 @@ struct FileEntry: Codable, Identifiable, Hashable, Sendable {
         switch status {
         case .cataloged: true
         case .indexed: indexedSignature != signature
-        // Une erreur mérite un nouvel essai : c'est souvent un téléchargement iCloud inachevé.
-        case .failed, .downloading: true
+        // Une erreur mérite un nouvel essai — c'est souvent un téléchargement iCloud inachevé —
+        // mais pas immédiatement, et pas indéfiniment. Sans ce délai, chaque retour dans l'app
+        // relançait le téléchargement et l'envoi de tous les fichiers en échec.
+        case .failed, .downloading: isRetryDue
         // Ces deux-là ne changeront pas d'avis : les réessayer ne ferait que relire pour rien
         // un fichier parfois très gros, à chaque scan.
         case .unsupported, .tooLarge: false
         }
+    }
+
+    /// Vrai quand le délai d'attente est écoulé et qu'il reste des essais.
+    var isRetryDue: Bool {
+        guard (failureCount ?? 0) < FileEntry.maximumAttempts else { return false }
+        guard let retryAfter else { return true }
+        return retryAfter <= .now
+    }
+
+    /// En échec, mais mis en attente : ni à réessayer maintenant, ni perdu.
+    var isWaitingToRetry: Bool {
+        (status == .failed || status == .downloading) && !isRetryDue
+    }
+
+    /// Délai avant le prochain essai : une minute, puis cinq, vingt, une heure.
+    static func backoff(after failures: Int) -> TimeInterval {
+        let steps: [TimeInterval] = [60, 300, 1200, 3600]
+        return steps[min(max(failures - 1, 0), steps.count - 1)]
     }
 
     var fileExtension: String {

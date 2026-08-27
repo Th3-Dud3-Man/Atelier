@@ -49,13 +49,14 @@ encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 let decoder = JSONDecoder()
 decoder.dateDecodingStrategy = .iso8601
 
+var ok = true
+@MainActor func check(_ label: String, _ condition: Bool) {
+    print(condition ? "  ✓ \(label)" : "  ✗ \(label)"); if !condition { ok = false }
+}
+
 do {
     let bytes = try encoder.encode(data)
     let back = try decoder.decode(AppData.self, from: bytes)
-    var ok = true
-    @MainActor func check(_ label: String, _ condition: Bool) {
-        print(condition ? "  ✓ \(label)" : "  ✗ \(label)"); if !condition { ok = false }
-    }
     print("Aller-retour JSON (\(bytes.count) octets) :")
     check("réglages", back.settings.storeName == data.settings.storeName
           && back.settings.webLevel == .deep && back.settings.priority == .parallel)
@@ -73,8 +74,63 @@ do {
     check("clé de mois", back.costs.first?.monthKey == data.costs.first?.monthKey)
     check("aucune clé API dans le JSON",
           !String(data: bytes, encoding: .utf8)!.lowercased().contains("apikey"))
-    print(ok ? "\nOK : la persistance survit intégralement." : "\nÉCHEC")
-    if !ok { exit(1) }
 } catch {
     print("ÉCHEC d'encodage/décodage : \(error)"); exit(1)
 }
+
+// ── Ce qui compte le plus : un fichier écrit par la version précédente se relit ─────────
+// Deux champs ont été ajoutés au registre. S'ils n'étaient pas facultatifs, le fichier de
+// l'utilisateur deviendrait illisible à la mise à jour — et son corpus, orphelin chez Google.
+
+print("\nUn registre écrit avant l'ajout du délai de reprise :")
+let ancien = Data(#"""
+{"schemaVersion":1,
+ "settings":{"mainModel":"gemini-3.1-flash-lite"},
+ "folders":[],
+ "files":[{"id":"abc/notes.pdf","folderID":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+           "relativePath":"Contrats/notes.pdf","name":"notes.pdf","size":12345,
+           "modified":"2026-08-01T10:00:00Z","status":"indexed",
+           "storeDocumentName":"fileSearchStores/x/documents/y",
+           "indexedAt":"2026-08-02T10:00:00Z","indexedSignature":"12345-1785578400",
+           "lastSeenAt":"2026-08-20T10:00:00Z"}],
+ "searches":[],"costs":[]}
+"""#.utf8)
+
+let lecteur = JSONDecoder()
+lecteur.dateDecodingStrategy = .iso8601
+if let restauré = try? lecteur.decode(AppData.self, from: ancien) {
+    check("le registre se relit", restauré.files.count == 1)
+    let fichier = restauré.files[0]
+    check("le nom du document chez Google est intact",
+          fichier.storeDocumentName == "fileSearchStores/x/documents/y")
+    check("le fichier reste indexé", fichier.status == .indexed)
+    check("il n'est pas réindexé pour rien", fichier.needsIndexing == false)
+    check("les champs ajoutés valent zéro sans casser la lecture",
+          fichier.failureCount == nil && fichier.retryAfter == nil)
+} else {
+    check("le registre se relit", false)
+    check("le nom du document chez Google est intact", false)
+    check("le fichier reste indexé", false)
+    check("il n'est pas réindexé pour rien", false)
+    check("les champs ajoutés valent zéro sans casser la lecture", false)
+}
+
+print("\nTemporisation des échecs :")
+var enÉchec = FileEntry(id: "x", folderID: UUID(), relativePath: "a.pdf", name: "a.pdf",
+                        size: 10, modified: .now, status: .failed)
+check("un premier échec se réessaie tout de suite", enÉchec.needsIndexing)
+enÉchec.failureCount = 1
+enÉchec.retryAfter = Date.now.addingTimeInterval(60)
+check("mais pas avant l'heure dite", !enÉchec.needsIndexing)
+check("et l'app le dit", enÉchec.isWaitingToRetry)
+enÉchec.retryAfter = Date.now.addingTimeInterval(-1)
+check("passé le délai, il repasse", enÉchec.needsIndexing)
+enÉchec.failureCount = FileEntry.maximumAttempts
+check("au bout de quatre essais, l'app cesse d'insister seule", !enÉchec.needsIndexing)
+check("les délais s'allongent",
+      FileEntry.backoff(after: 1) < FileEntry.backoff(after: 3))
+check("et plafonnent",
+      FileEntry.backoff(after: 9) == FileEntry.backoff(after: 4))
+
+print(ok ? "\nOK : la persistance survit intégralement." : "\nÉCHEC")
+if !ok { exit(1) }

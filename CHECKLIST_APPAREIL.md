@@ -157,6 +157,24 @@ Vérifiez aussi que **Relancer** relance vraiment (le coût affiché doit augmen
 
 ---
 
+## Si l'indexation traîne ou paraît bloquée
+
+Ouvrez **Mes fichiers** et lisez la première section :
+
+- **« N fichier(s) en attente d'un nouvel essai »** — des fichiers ont échoué. L'app les
+  reprend d'elle-même, de plus en plus espacé, et cesse d'insister au bout de quatre essais.
+  Le menu **⋯ › Réessayer les fichiers en erreur** force la reprise.
+- **« Indexation 12 / 240 »** qui n'avance plus — un fichier volumineux est en cours de
+  téléchargement depuis iCloud. Le bouton **Arrêter** est à côté ; l'indexation reprendra
+  au prochain scan sans rien perdre.
+- **Diagnostics › En erreur** donne le nombre exact, et chaque fichier porte sa raison en
+  rouge dans la liste.
+
+Rien de tout cela n'efface quoi que ce soit : un fichier en échec reste au catalogue, et
+un fichier déjà indexé garde son lien avec le corpus.
+
+---
+
 ## Si l'app s'arrête brutalement
 
 Un arrêt brutal laisse une trace sur l'appareil, et cette trace nomme la cause exacte.

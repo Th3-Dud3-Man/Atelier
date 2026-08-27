@@ -226,6 +226,9 @@ final class FolderSync: FileIndexing {
         }
         guard await ensureStore() else { return }
 
+        store.beginBatch()
+        defer { Task { await store.endBatch() } }
+
         var done = 0
         var skipped = 0
         // Compteur courant plutôt qu'une somme recalculée à chaque fichier : sur un corpus de
@@ -426,6 +429,8 @@ final class FolderSync: FileIndexing {
             updated.indexedAt = .now
             updated.indexedSignature = entry.signature
             updated.errorMessage = nil
+            updated.failureCount = nil
+            updated.retryAfter = nil
             store.upsert(updated)
 
             store.record(CostEntry(
@@ -440,8 +445,15 @@ final class FolderSync: FileIndexing {
             return false
         } catch {
             var updated = entry
+            let failures = (entry.failureCount ?? 0) + 1
             updated.status = .failed
+            updated.failureCount = failures
+            updated.retryAfter = Date.now.addingTimeInterval(FileEntry.backoff(after: failures))
             updated.errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            if failures >= FileEntry.maximumAttempts {
+                updated.errorMessage = (updated.errorMessage ?? "")
+                    + " — abandonné après \(failures) essais. Touchez « Réessayer » pour insister."
+            }
             store.upsert(updated)
             return false
         }
@@ -486,6 +498,21 @@ final class FolderSync: FileIndexing {
         }
         isScanning = false
         await scanAll(force: true)
+    }
+
+    /// Efface les délais d'attente et relance : c'est le geste explicite de l'utilisateur,
+    /// il l'emporte sur la temporisation.
+    func retryFailed() async {
+        let waiting = store.files.filter { $0.status == .failed || $0.status == .downloading }
+        guard !waiting.isEmpty else { return }
+        store.upsertFiles(waiting.map { file in
+            var copy = file
+            copy.failureCount = nil
+            copy.retryAfter = nil
+            return copy
+        })
+        lastError = nil
+        await scanAll()
     }
 
     /// Retire un fichier du corpus sans le retirer du catalogue.

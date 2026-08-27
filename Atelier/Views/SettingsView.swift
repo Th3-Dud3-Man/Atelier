@@ -319,8 +319,8 @@ struct SettingsView: View {
     private var budgetSection: some View {
         Section {
             LabeledContent("Ce mois-ci") {
-                Text(CostModel.formatEUR(store.monthTotal(), prices: store.settings.prices))
-                    + Text(" · \(CostModel.format(store.monthTotal()))")
+                Text(CostModel.formatEUR(store.summary.monthTotal, prices: store.settings.prices))
+                    + Text(" · \(CostModel.format(store.summary.monthTotal))")
                     .foregroundStyle(.secondary)
             }
             Stepper(
@@ -373,7 +373,7 @@ struct SettingsView: View {
                 step: 1
             )
 
-            LabeledContent("Au catalogue") { Text("\(store.catalogedFiles.count) fichier(s)") }
+            LabeledContent("Au catalogue") { Text("\(store.summary.catalogedCount) fichier(s)") }
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         } header: {
@@ -450,8 +450,9 @@ struct SettingsView: View {
 
     private var diagnosticsSection: some View {
         Section("Diagnostics") {
-            LabeledContent("Fichiers indexés") { Text("\(store.indexedFiles.count)") }
-            LabeledContent("Fichiers catalogués") { Text("\(store.catalogedFiles.count)") }
+            LabeledContent("Fichiers indexés") { Text("\(store.summary.indexedCount)") }
+            LabeledContent("Fichiers catalogués") { Text("\(store.summary.catalogedCount)") }
+            LabeledContent("En erreur") { Text("\(store.summary.problemCount)") }
             LabeledContent("Recherches") { Text("\(store.searches.count)") }
             LabeledContent("Store Gemini") {
                 Text(store.settings.storeName.isEmpty ? "non créé" : "créé")
