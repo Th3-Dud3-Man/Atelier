@@ -21,6 +21,25 @@ final class FolderSync: FileIndexing {
     private(set) var isScanning = false
     /// Texte de la pastille d'accueil, nil quand il n'y a rien à signaler.
     private(set) var progressText: String?
+
+    /// Avancement chiffré d'une indexation, pour la barre de progression.
+    ///
+    /// Distinct de `progressText` : celui-ci porte aussi des étapes sans nombre — lecture du
+    /// dossier, vérification du corpus — pendant lesquelles une barre n'aurait rien à montrer.
+    struct Progress: Equatable, Sendable {
+        var done: Int
+        var total: Int
+        /// Fichier en cours, affiché sous la barre.
+        var current: String
+        /// Fichiers écartés en chemin : budget de corpus, format refusé.
+        var skipped: Int = 0
+
+        var fraction: Double {
+            total > 0 ? min(1, Double(done) / Double(total)) : 0
+        }
+    }
+
+    private(set) var progress: Progress?
     private(set) var lastError: String?
 
     private var task: Task<Void, Never>?
@@ -101,6 +120,7 @@ final class FolderSync: FileIndexing {
         defer {
             isScanning = false
             progressText = nil
+            progress = nil
         }
 
         for folder in store.folders {
@@ -242,6 +262,7 @@ final class FolderSync: FileIndexing {
             // Le plafond peut être franchi en cours de lot : chaque fichier a son coût.
             if store.capReached {
                 lastError = capMessage
+                progress = nil
                 return
             }
             // Budget du corpus : le fichier qui n'y tient pas reste au catalogue, sans erreur.
@@ -253,12 +274,16 @@ final class FolderSync: FileIndexing {
             }
             done += 1
             progressText = "Indexation \(done) / \(pending.count) — \(entry.name)"
+            progress = Progress(done: done - 1, total: pending.count,
+                                current: entry.name, skipped: skipped)
             if await index(entry) {
                 used += store.file(id: entry.id)?.size ?? entry.size
             }
         }
+        progress = Progress(done: done, total: pending.count, current: "", skipped: skipped)
         await reconcileDocumentNames()
         progressText = nil
+        progress = nil
 
         if skipped > 0 {
             lastError = "Le corpus est plein (\(store.corpusUsageText)) : \(skipped) fichier(s) "
@@ -317,6 +342,12 @@ final class FolderSync: FileIndexing {
         let message = error.message.lowercased()
         return message.contains("mime") || message.contains("unsupported")
             || message.contains("not supported")
+    }
+
+    /// Reconnaître le format demande de lire l'archive : hors du fil qui dessine l'écran.
+    private static func decidePlan(for data: Data, name: String) async -> DocumentText.Plan {
+        (try? await offMainActor { DocumentText.plan(for: data, name: name) })
+            ?? .upload(mime: SupportedTypes.mimeType(for: name))
     }
 
     /// L'extraction lit et décompresse : c'est du travail, et il n'a rien à faire sur le fil
@@ -381,11 +412,15 @@ final class FolderSync: FileIndexing {
                 try? await gemini.deleteDocument(named: previous)
             }
 
-            // Ce que Gemini refuse est converti ici, sur l'appareil : l'archive est ouverte,
-            // le texte en est tiré, et c'est lui qui part — en texte simple.
+            // La décision se prend sur le contenu, jamais sur l'extension : un « .doc » est
+            // aussi souvent du RTF, du HTML ou un .docx renommé qu'un vrai binaire Word.
             var payload = data
-            var mime = SupportedTypes.mimeType(for: entry.name)
-            if SupportedTypes.needsConversion(entry.name) {
+            var mime: String
+            switch await Self.decidePlan(for: data, name: entry.name) {
+            case .upload(let declared):
+                mime = declared
+
+            case .convert:
                 guard let converted = await Self.extractText(from: data, name: entry.name) else {
                     var failed = entry
                     failed.size = realSize
@@ -397,6 +432,16 @@ final class FolderSync: FileIndexing {
                 }
                 payload = Data(converted.utf8)
                 mime = "text/plain"
+
+            case .reject(let reason):
+                // Un refus est définitif : le marquer « non pris en charge » l'écarte des
+                // reprises, au lieu de le faire réessayer indéfiniment.
+                var rejected = entry
+                rejected.size = realSize
+                rejected.status = .unsupported
+                rejected.errorMessage = reason
+                store.upsert(rejected)
+                return false
             }
 
             let documentName: String

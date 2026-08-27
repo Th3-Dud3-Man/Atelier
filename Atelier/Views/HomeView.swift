@@ -258,6 +258,9 @@ struct HomeView: View {
                 destination: .settings
             )
         }
+        if let step = sync.progress {
+            return StatusPill(text: "Indexation \(step.done) sur \(step.total)", destination: .files)
+        }
         if let progress = sync.progressText {
             return StatusPill(text: progress, destination: .files)
         }

@@ -127,10 +127,42 @@ struct FilesView: View {
 
     @ViewBuilder
     private var statusSection: some View {
-        if sync.isScanning || sync.progressText != nil || sync.lastError != nil
-            || store.summary.waitingCount > 0 {
+        if sync.isScanning || sync.progressText != nil || sync.progress != nil
+            || sync.lastError != nil || store.summary.waitingCount > 0 {
             Section {
-                if let progress = sync.progressText {
+                if let step = sync.progress {
+                    // Une barre chiffrée dès qu'on sait combien de fichiers restent : sur deux
+                    // cent cinquante documents, « ça travaille » ne dit rien, « 34 sur 267 » dit
+                    // tout — et notamment si cela avance encore.
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Indexation \(step.done) sur \(step.total)")
+                                .font(.footnote.weight(.medium))
+                                .monospacedDigit()
+                            Spacer()
+                            Button("Arrêter") { sync.cancel() }
+                                .font(.footnote)
+                                .buttonStyle(.plain)
+                                .foregroundStyle(Color.atelierAccent)
+                        }
+                        ProgressView(value: step.fraction)
+                            .tint(Color.atelierAccent)
+                        if !step.current.isEmpty {
+                            Text(step.current)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        if step.skipped > 0 {
+                            Text("\(step.skipped) fichier(s) laissés au catalogue, faute de place "
+                                 + "dans le budget du corpus.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                } else if let progress = sync.progressText {
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small)
                         Text(progress).font(.footnote).foregroundStyle(.secondary)

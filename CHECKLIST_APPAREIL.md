@@ -164,9 +164,10 @@ Ouvrez **Mes fichiers** et lisez la première section :
 - **« N fichier(s) en attente d'un nouvel essai »** — des fichiers ont échoué. L'app les
   reprend d'elle-même, de plus en plus espacé, et cesse d'insister au bout de quatre essais.
   Le menu **⋯ › Réessayer les fichiers en erreur** force la reprise.
-- **« Indexation 12 / 240 »** qui n'avance plus — un fichier volumineux est en cours de
-  téléchargement depuis iCloud. Le bouton **Arrêter** est à côté ; l'indexation reprendra
-  au prochain scan sans rien perdre.
+- **La barre de progression** — « Indexation 34 sur 267 », le nom du fichier en cours
+  dessous, et le bouton **Arrêter** à droite. Si la barre n'avance plus pendant plusieurs
+  minutes, c'est qu'un fichier volumineux se télécharge depuis iCloud : le nom affiché vous
+  dit lequel. Arrêter ne perd rien, l'indexation reprend au scan suivant.
 - **Diagnostics › En erreur** donne le nombre exact, et chaque fichier porte sa raison en
   rouge dans la liste.
 

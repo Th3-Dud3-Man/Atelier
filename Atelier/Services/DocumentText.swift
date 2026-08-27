@@ -13,13 +13,123 @@ import Foundation
 /// dit franchement quand le résultat n'est pas exploitable.
 enum DocumentText {
 
-    /// Formats que Gemini refuse, et dont on sait tirer le texte ici.
-    static let convertible: Set<String> = [
-        "epub", "ods", "odp", "ppt", "doc", "pages", "numbers", "key", "odg",
-    ]
+    // ── Reconnaître le format réel, pas celui du nom ─────────────────
+
+    /// Ce qu'un fichier est vraiment, d'après ses premiers octets.
+    ///
+    /// L'extension ment souvent, et `.doc` est le pire de tous : Word y a enregistré du RTF
+    /// et du HTML pendant vingt ans, et un `.docx` renommé `.doc` reste une archive ZIP.
+    /// Envoyer un fichier sous un type déduit de son nom, c'est envoyer une devinette.
+    enum Format: Equatable {
+        case pdf
+        /// Archive ZIP : OOXML, OpenDocument, ePub, iWork.
+        case officeArchive
+        /// Conteneur binaire d'avant 2007 — Word, Excel, PowerPoint 97-2003.
+        case legacyBinary
+        case rtf
+        case html
+        case xml
+        case plainText
+        case unreadable
+    }
+
+    static func sniff(_ data: Data) -> Format {
+        let head = [UInt8](data.prefix(512))
+        guard head.count >= 4 else { return .unreadable }
+
+        func starts(with bytes: [UInt8]) -> Bool {
+            head.count >= bytes.count && Array(head.prefix(bytes.count)) == bytes
+        }
+
+        if starts(with: [0x25, 0x50, 0x44, 0x46]) { return .pdf }                     // %PDF
+        if starts(with: [0x50, 0x4B, 0x03, 0x04]) { return .officeArchive }           // PK..
+        if starts(with: [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]) {           // OLE
+            return .legacyBinary
+        }
+        if starts(with: [0x7B, 0x5C, 0x72, 0x74, 0x66]) { return .rtf }               // {\rtf
+
+        // Le texte peut commencer par des blancs ou une marque d'ordre des octets.
+        let text = String(decoding: data.prefix(4096), as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        if text.hasPrefix("<?xml") {
+            return text.contains("<html") || text.contains("xhtml") ? .html : .xml
+        }
+        if text.hasPrefix("<!doctype html") || text.hasPrefix("<html") { return .html }
+
+        // Reste à savoir si c'est lisible. Un fichier binaire est plein d'octets de contrôle.
+        let sample = data.prefix(4096)
+        guard !sample.isEmpty else { return .unreadable }
+        let control = sample.filter { $0 < 0x09 || ($0 > 0x0D && $0 < 0x20) }.count
+        return Double(control) / Double(sample.count) < 0.02 ? .plainText : .unreadable
+    }
+
+    /// Ce qu'il faut faire d'un fichier : l'envoyer tel quel, en extraire le texte, ou renoncer.
+    enum Plan: Equatable {
+        case upload(mime: String)
+        case convert
+        case reject(String)
+    }
+
+    static func plan(for data: Data, name: String) -> Plan {
+        let ext = (name as NSString).pathExtension.lowercased()
+
+        switch sniff(data) {
+        case .pdf:
+            return .upload(mime: "application/pdf")
+
+        case .rtf:
+            return .upload(mime: "text/rtf")
+
+        case .html:
+            return .upload(mime: "text/html")
+
+        case .xml:
+            return .upload(mime: "text/xml")
+
+        case .officeArchive:
+            // Un vrai OOXML part tel quel : Gemini le lit mieux que nous. Les autres archives
+            // — OpenDocument tableur, ePub, iWork — passent par l'extraction.
+            guard let archive = Zip(data) else { return .convert }
+            if archive.names.contains("word/document.xml") {
+                return .upload(mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+            }
+            if archive.names.contains("xl/workbook.xml") {
+                return .upload(mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            }
+            if archive.names.contains("ppt/presentation.xml") {
+                return .upload(mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+            }
+            if archive.names.contains("content.xml") {
+                // Seul le traitement de texte OpenDocument figure dans la liste de Gemini.
+                let isText = archive.contents(of: "mimetype")?.contains("opendocument.text") == true
+                return isText
+                    ? .upload(mime: "application/vnd.oasis.opendocument.text")
+                    : .convert
+            }
+            return .convert
+
+        case .legacyBinary:
+            // Gemini accepte `application/msword`, mais échoue souvent à en tirer le texte,
+            // et son échec nous revient sans explication. On le fait ici, où l'on peut au
+            // moins juger du résultat.
+            return .convert
+
+        case .plainText:
+            return .upload(mime: SupportedTypes.mimeType(for: name))
+
+        case .unreadable:
+            return .reject(ext.isEmpty
+                ? "Ce fichier n'a pas de contenu lisible."
+                : "Ce fichier « .\(ext) » n'a pas de contenu textuel lisible.")
+        }
+    }
 
     /// Rend le texte du document, ou `nil` si l'on n'en tire rien d'exploitable.
     static func extract(from data: Data, name: String) -> String? {
+        // Le format réel commande, pas l'extension : un `.doc` peut être une archive.
+        if sniff(data) == .legacyBinary { return check(fromLegacyBinary(data)) }
+
         let text: String?
         switch (name as NSString).pathExtension.lowercased() {
         case "docx", "docm", "dotx":
@@ -40,13 +150,18 @@ enum DocumentText {
         case "ppt", "doc", "xls":
             text = fromLegacyBinary(data)
         default:
-            text = nil
+            // Nom inconnu mais archive reconnue : on tente quand même les pièces habituelles.
+            text = fromZip(data, members: ["word/document.xml", "content.xml"],
+                           breakAfter: ["</w:p>", "</text:p>"])
         }
+        return check(text)
+    }
 
+    /// Moins de deux cents caractères tirés d'un document entier : l'extraction a échoué,
+    /// et envoyer ce résidu polluerait le corpus sans rien apporter.
+    private static func check(_ text: String?) -> String? {
         guard let text else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Moins de deux cents caractères tirés d'un document entier : l'extraction a échoué,
-        // et envoyer ce résidu polluerait le corpus sans rien apporter.
         return trimmed.count >= 200 ? trimmed : nil
     }
 
@@ -95,27 +210,61 @@ enum DocumentText {
 
     // ── Formats binaires d'avant 2007 ────────────────────────────────
 
-    /// Dernier recours : on relève les suites de caractères lisibles. C'est grossier, mais
-    /// sur une lettre ou une note cela rend le texte ; sur un document complexe, le contrôle
-    /// des deux cents caractères écartera le résultat.
+    /// Noms de flux et de polices que tout conteneur Word contient, et qui n'ont rien à
+    /// faire dans le corpus.
+    private static let olePlumbing = [
+        "root entry", "worddocument", "objectpool", "compobj", "summaryinformation",
+        "documentsummary", "msworddoc", "word.document", "times new roman", "arial",
+        "cambria", "calibri", "wingdings", "symbol", "microsoft word", "normal.dot",
+    ]
+
+    /// Dernier recours : on relève les suites de caractères lisibles.
+    ///
+    /// Deux précautions que l'absence de l'une rendait l'app inutilisable. D'abord la vitesse :
+    /// la version précédente ajoutait les caractères un par un dans une chaîne, sur le fichier
+    /// entier — sur un document de plusieurs mégaoctets, cela occupait l'app pendant des
+    /// minutes. On travaille désormais sur les octets, et on s'arrête à douze mégaoctets,
+    /// bien au-delà de ce que contient un traitement de texte de cette époque.
+    /// Ensuite la qualité : un conteneur binaire est plein de noms de flux et de polices.
+    /// On ne garde que ce qui ressemble à de la prose.
     private static func fromLegacyBinary(_ data: Data) -> String? {
+        let scanned = data.prefix(12 * 1024 * 1024)
         var runs: [String] = []
-        var current = ""
-        // Le format stocke souvent le texte en UTF-16 : un octet sur deux est nul.
-        for scalar in data {
-            if scalar == 0 { continue }
-            if scalar >= 0x20 && scalar < 0x7F {
-                current.unicodeScalars.append(Unicode.Scalar(scalar))
-            } else if scalar >= 0xC0, let mapped = Unicode.Scalar(UInt32(scalar)) {
-                current.unicodeScalars.append(mapped)   // latin-1 approximatif
-            } else {
-                if current.count >= 12 { runs.append(current) }
-                current = ""
+        var current: [UInt8] = []
+        current.reserveCapacity(512)
+
+        func flush() {
+            defer { current.removeAll(keepingCapacity: true) }
+            guard current.count >= 12 else { return }
+            let text = String(String.UnicodeScalarView(current.map { Unicode.Scalar($0) }))
+            if isProse(text) { runs.append(text) }
+        }
+
+        scanned.withUnsafeBytes { raw in
+            for byte in raw {
+                // Le texte est souvent rangé en UTF-16 : un octet sur deux est nul.
+                if byte == 0 { continue }
+                if (byte >= 0x20 && byte < 0x7F) || byte >= 0xC0 {
+                    current.append(byte)
+                } else {
+                    flush()
+                }
             }
         }
-        if current.count >= 12 { runs.append(current) }
-        let joined = runs.joined(separator: " ")
+        flush()
+
+        let joined = runs.joined(separator: "\n")
         return joined.isEmpty ? nil : joined
+    }
+
+    /// Vrai quand une suite de caractères ressemble à une phrase plutôt qu'à un nom de flux.
+    private static func isProse(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        if olePlumbing.contains(where: lowered.contains) { return false }
+        let letters = text.filter { $0.isLetter }.count
+        guard Double(letters) / Double(text.count) > 0.6 else { return false }
+        // Une suite sans voyelle ni espace est un identifiant, pas une phrase.
+        return text.contains(" ") && lowered.contains(where: "aeiouyàâéèêëîïôöùûü".contains)
     }
 
     // ── XML vers texte ───────────────────────────────────────────────
